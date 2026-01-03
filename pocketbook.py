@@ -166,7 +166,7 @@ def process_booklet_pdf(input_pdf, output_pdf, title=""):
 
 def main():
     if len(sys.argv) != 2:
-        print("Usage: python script.py <zip_path_or_url>")
+        print("Usage: ./pocketbook.py <zip_path_or_url>")
         sys.exit(1)
     arg = sys.argv[1]
     temp_dir = tempfile.mkdtemp()

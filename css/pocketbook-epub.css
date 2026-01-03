@@ -1,0 +1,60 @@
+@page {
+    size: 75mm 105mm; /* 16 pages per sheet */
+    margin: 1mm; 
+    margin-bottom: 2mm;
+    @bottom-center{
+      font-size: 5pt;
+      content: counter(page);
+    }
+}
+
+html, body {
+  margin: 0px !important;
+  font-size: 7pt !important;
+  line-height: 1.0 !important;
+  text-align: justify !important;
+  text-justify: inter-word !important;
+}
+
+div.chapter {
+  page-break-before: avoid !important;
+  margin-top: 0mm !important;
+}
+
+h2 {
+  font-size: 100% !important;
+  margin-top: 1mm !important;
+  margin-bottom: 1mm !important;
+  font-weight: bold !important;
+}
+
+br {
+  display: none;
+}
+p {
+  display: inline;
+}
+
+#pg-header, #pg-footer {
+  display:none;
+}
+
+.pagenum {
+  display:none;
+}
+
+img {
+  max-width: 95%;
+  max-height: 95vh;
+  height: auto;
+  width: auto;
+  /* diplay:none; */
+}
+
+a,
+a:visited,
+a:hover,
+a:active {
+  color: black;
+}
+
