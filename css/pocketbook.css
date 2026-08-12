@@ -43,11 +43,7 @@ p {
   display:none;
 }
 
-img {
-  max-width: 95%;
-  max-height: 95vh;
-  height: auto;
-  width: auto;
-  /* diplay:none; */
+img, svg, picture, object, embed, video, audio, iframe {
+  display: none !important;
 }
 

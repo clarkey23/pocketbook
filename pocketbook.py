@@ -112,8 +112,11 @@ def guess_title(html_file):
     html_name = os.path.splitext(os.path.basename(html_file))[0]
     if not title:
         title = html_name
-    safe_title = re.sub(r"[^0-9a-zA-Z]+", "_", title)
-    return safe_title
+    # Keep filenames short so Downloads / Finder stay sane.
+    safe_title = re.sub(r"[^0-9a-zA-Z]+", "_", title).strip("_")
+    if len(safe_title) > 40:
+        safe_title = safe_title[:40].rstrip("_")
+    return safe_title or "pocketbook"
 
 
 def find_html_file(dir):
@@ -128,14 +131,39 @@ def find_html_file(dir):
     return os.path.join(dir, html_files[0])
 
 
+def prepare_html_for_fast_print(html_file):
+    """Strip images and Gutenberg chrome so WeasyPrint stays fast and small."""
+    with open(html_file, "r", encoding="utf-8", errors="ignore") as f:
+        soup = BeautifulSoup(f, "html.parser")
+
+    for selector in ("#pg-header", "#pg-footer", "script", "style", "link", "noscript"):
+        for tag in soup.select(selector):
+            tag.decompose()
+
+    for tag in soup.find_all(["img", "svg", "picture", "source", "object", "embed", "video", "audio", "iframe"]):
+        tag.decompose()
+
+    # Drop empty figures left behind after image removal.
+    for tag in soup.find_all("figure"):
+        if not tag.get_text(strip=True):
+            tag.decompose()
+
+    cleaned = os.path.splitext(html_file)[0] + ".pocket.html"
+    with open(cleaned, "w", encoding="utf-8") as f:
+        f.write(str(soup))
+    return cleaned
+
+
 def convert_html_to_pdf(html_file, css_file=DEFAULT_CSS):
     if not os.path.isfile(html_file):
         raise PocketbookError(f"{html_file} not found.")
     if not os.path.isfile(css_file):
         raise PocketbookError(f"{css_file} not found.")
+    print("Preparing text-only HTML (skipping images) ...")
+    fast_html = prepare_html_for_fast_print(html_file)
     output_pdf = os.path.splitext(html_file)[0] + ".pdf"
     print(f"Creating pdf {output_pdf}")
-    HTML(html_file).write_pdf(output_pdf, stylesheets=[CSS(css_file)])
+    HTML(fast_html).write_pdf(output_pdf, stylesheets=[CSS(css_file)])
     print("Done.")
     return output_pdf
 
@@ -212,9 +240,31 @@ def nup_2x4(input_pdf, output_pdf, title=""):
                     rotate=90, fontsize=5,
                     color=(0.4, 0.4, 0.4), fontname="helv",
                 )
-    out.save(output_pdf)
-    out.close()
-    src.close()
+    # Save to a temp file first so Downloads overwrite permission issues don't crash MuPDF.
+    fd, tmp_out = tempfile.mkstemp(suffix=".pdf")
+    os.close(fd)
+    try:
+        out.save(tmp_out, garbage=3, deflate=True)
+    finally:
+        out.close()
+        src.close()
+    try:
+        shutil.copyfile(tmp_out, output_pdf)
+    finally:
+        if os.path.exists(tmp_out):
+            os.remove(tmp_out)
+
+
+def unique_booklet_path(output_dir: str, title: str) -> str:
+    base = os.path.join(output_dir, f"{title}-booklet.pdf")
+    if not os.path.exists(base):
+        return base
+    n = 2
+    while True:
+        candidate = os.path.join(output_dir, f"{title}-booklet-{n}.pdf")
+        if not os.path.exists(candidate):
+            return candidate
+        n += 1
 
 
 def process_booklet_pdf(input_pdf, output_pdf, title=""):
@@ -246,6 +296,7 @@ def make_booklet(source: str, output_dir: Optional[str] = None, css_file: str = 
     unzip_dir = tempfile.mkdtemp()
     try:
         if is_url(source):
+            print("Downloading ...")
             zip_path = download_zip(source, temp_dir)
         elif os.path.isfile(source) and source.lower().endswith(".zip"):
             zip_path = source
@@ -258,7 +309,7 @@ def make_booklet(source: str, output_dir: Optional[str] = None, css_file: str = 
         html_file = find_html_file(unzip_dir)
         pdf_filename = convert_html_to_pdf(html_file, css_file)
         title = guess_title(html_file)
-        booklet_filename = os.path.join(output_dir, f"{title}-booklet.pdf")
+        booklet_filename = unique_booklet_path(output_dir, title)
         process_booklet_pdf(pdf_filename, booklet_filename, title)
         return os.path.abspath(booklet_filename)
     finally:
