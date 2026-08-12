@@ -2,6 +2,16 @@
 
 import sys
 import os
+
+# WeasyPrint needs Homebrew Pango/GLib on macOS; make libs discoverable before import.
+_homebrew_lib = "/opt/homebrew/lib"
+if sys.platform == "darwin" and os.path.isdir(_homebrew_lib):
+    _fallback = os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
+    if _homebrew_lib not in _fallback.split(":"):
+        os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
+            f"{_homebrew_lib}:{_fallback}" if _fallback else _homebrew_lib
+        )
+
 import tempfile
 import urllib.request
 import zipfile
