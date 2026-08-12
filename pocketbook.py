@@ -15,6 +15,8 @@ if sys.platform == "darwin" and os.path.isdir(_homebrew_lib):
 import tempfile
 import urllib.request
 import zipfile
+import subprocess
+import time
 from weasyprint import HTML, CSS
 from PyPDF2 import PdfReader, PdfWriter
 import fitz  # PyMuPDF
@@ -32,6 +34,48 @@ class PocketbookError(Exception):
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CSS = os.path.join(ROOT_DIR, "css", "pocketbook.css")
+STATUS_PATH = os.path.join(
+    os.path.expanduser("~"),
+    "Library",
+    "Application Support",
+    "PocketBook",
+    "status.txt",
+)
+
+# stage_num, total_stages, message
+_TOTAL_STAGES = 6
+
+
+def write_status(stage: int, message: str) -> None:
+    """Publish progress for the Mac app progress window + stdout."""
+    line = f"{stage}/{_TOTAL_STAGES}|{message}"
+    print(message, flush=True)
+    try:
+        os.makedirs(os.path.dirname(STATUS_PATH), exist_ok=True)
+        with open(STATUS_PATH, "w", encoding="utf-8") as f:
+            f.write(line)
+    except OSError:
+        pass
+    if sys.platform == "darwin":
+        # Lightweight notification so Dock-app users see movement.
+        safe = message.replace('"', '\\"')
+        subprocess.Popen(
+            [
+                "osascript",
+                "-e",
+                f'display notification "{safe}" with title "PocketBook" subtitle "Step {stage} of {_TOTAL_STAGES}"',
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def clear_status() -> None:
+    try:
+        if os.path.exists(STATUS_PATH):
+            os.remove(STATUS_PATH)
+    except OSError:
+        pass
 
 
 def is_url(path):
@@ -159,12 +203,17 @@ def convert_html_to_pdf(html_file, css_file=DEFAULT_CSS):
         raise PocketbookError(f"{html_file} not found.")
     if not os.path.isfile(css_file):
         raise PocketbookError(f"{css_file} not found.")
-    print("Preparing text-only HTML (skipping images) ...")
+    write_status(3, "Preparing text (skipping images)…")
     fast_html = prepare_html_for_fast_print(html_file)
     output_pdf = os.path.splitext(html_file)[0] + ".pdf"
-    print(f"Creating pdf {output_pdf}")
+    # Size hint: long books spend most time here.
+    try:
+        kb = max(1, os.path.getsize(fast_html) // 1024)
+        write_status(4, f"Creating PDF from {kb} KB of text… (slow step)")
+    except OSError:
+        write_status(4, "Creating PDF… (slow step)")
     HTML(fast_html).write_pdf(output_pdf, stylesheets=[CSS(css_file)])
-    print("Done.")
+    write_status(4, "PDF text layout done")
     return output_pdf
 
 
@@ -268,7 +317,7 @@ def unique_booklet_path(output_dir: str, title: str) -> str:
 
 
 def process_booklet_pdf(input_pdf, output_pdf, title=""):
-    print("Creating booklet ...")
+    write_status(5, "Imposing pages into pocket booklet…")
     tmp1 = tempfile.mktemp(suffix=".pdf")
     tmp2 = tempfile.mktemp(suffix=".pdf")
     try:
@@ -279,7 +328,7 @@ def process_booklet_pdf(input_pdf, output_pdf, title=""):
         for path in (tmp1, tmp2):
             if os.path.exists(path):
                 os.remove(path)
-    print(f"Booklet PDF created: {output_pdf}")
+    write_status(6, f"Saved booklet")
 
 
 def make_booklet(source: str, output_dir: Optional[str] = None, css_file: str = DEFAULT_CSS) -> str:
@@ -288,6 +337,7 @@ def make_booklet(source: str, output_dir: Optional[str] = None, css_file: str = 
 
     Returns the absolute path to the generated booklet PDF.
     """
+    started = time.time()
     source = normalize_gutenberg_source(source)
     output_dir = output_dir or os.path.join(os.path.expanduser("~"), "Downloads")
     os.makedirs(output_dir, exist_ok=True)
@@ -296,22 +346,29 @@ def make_booklet(source: str, output_dir: Optional[str] = None, css_file: str = 
     unzip_dir = tempfile.mkdtemp()
     try:
         if is_url(source):
-            print("Downloading ...")
+            write_status(1, "Downloading from Project Gutenberg…")
             zip_path = download_zip(source, temp_dir)
         elif os.path.isfile(source) and source.lower().endswith(".zip"):
+            write_status(1, "Using local zip file…")
             zip_path = source
         else:
             raise PocketbookError(
                 "Provide a Gutenberg HTML zip URL, ebook page URL, or local .zip file."
             )
 
+        write_status(2, "Extracting book…")
         unzip_file(zip_path, unzip_dir)
         html_file = find_html_file(unzip_dir)
         pdf_filename = convert_html_to_pdf(html_file, css_file)
         title = guess_title(html_file)
         booklet_filename = unique_booklet_path(output_dir, title)
         process_booklet_pdf(pdf_filename, booklet_filename, title)
+        elapsed = int(time.time() - started)
+        write_status(6, f"Done in {elapsed}s → Downloads")
         return os.path.abspath(booklet_filename)
+    except Exception:
+        write_status(0, "Failed")
+        raise
     finally:
         shutil.rmtree(temp_dir, ignore_errors=True)
         shutil.rmtree(unzip_dir, ignore_errors=True)
