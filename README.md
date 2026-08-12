@@ -27,22 +27,34 @@ The [books](books/) directory contains a few books ready to print (see below for
 
 ### Install
 
-Clone the repository
-
 ```
-git clone git@github.com:sieste/pocketbook.git
+git clone https://github.com/clarkey23/pocketbook.git
 cd pocketbook
 ```
 
-Create a python virtual environment and install required libraries
+#### Mac Dock app (easiest)
+
+Needs [Homebrew](https://brew.sh) first.
 
 ```
-python -m venv venv
+brew install pango
+./install-mac-app.sh
+```
+
+That builds **PocketBook.app** in `~/Applications`. Open it, then right-click the Dock icon → **Options → Keep in Dock**.
+
+Paste a Gutenberg link when prompted. PDFs land in **Downloads**. Images are skipped so long books stay fast.
+
+#### Command line
+
+```
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+brew install pango   # macOS / WeasyPrint
 ```
 
-### Run
+### Run (CLI)
 
 ```
 source venv/bin/activate

@@ -1,9 +1,9 @@
 #!/bin/bash
-cd "$(dirname "$0")" || exit 1
-
-osascript <<'EOF' >/dev/null 2>&1
-display notification "Starting PocketBook…" with title "PocketBook"
-EOF
+SUPPORT="$HOME/Library/Application Support/PocketBook"
+cd "$SUPPORT" || {
+  osascript -e 'display alert "PocketBook" message "Setup is incomplete. Open Cursor and ask to reinstall PocketBook." as critical'
+  exit 1
+}
 
 URL=$(osascript <<'EOF'
 try
@@ -16,13 +16,10 @@ EOF
 )
 
 URL=$(echo "$URL" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-if [ -z "$URL" ]; then
-  exit 0
-fi
+[ -z "$URL" ] && exit 0
 
 if [ ! -x "venv/bin/python" ]; then
-  osascript -e 'display alert "PocketBook" message "Setup is incomplete. Ask Cursor to run the install steps again." as critical'
+  osascript -e 'display alert "PocketBook" message "Setup is incomplete. Open Cursor and ask to reinstall PocketBook." as critical'
   exit 1
 fi
 
@@ -36,10 +33,9 @@ if [ $STATUS -ne 0 ]; then
 fi
 
 PDF=$(echo "$OUTPUT" | sed -n 's/^Booklet ready: //p' | tail -n 1)
-
 if [ -n "$PDF" ] && [ -f "$PDF" ]; then
   open "$PDF"
-  osascript -e 'display notification "Your booklet PDF is ready." with title "PocketBook"'
+  osascript -e 'display notification "Saved to Downloads." with title "PocketBook"'
 else
   osascript -e 'display alert "PocketBook" message "Finished, but could not find the PDF." as critical'
 fi
