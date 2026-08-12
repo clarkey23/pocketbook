@@ -239,7 +239,7 @@ def make_booklet(source: str, output_dir: Optional[str] = None, css_file: str = 
     Returns the absolute path to the generated booklet PDF.
     """
     source = normalize_gutenberg_source(source)
-    output_dir = output_dir or os.getcwd()
+    output_dir = output_dir or os.path.join(os.path.expanduser("~"), "Downloads")
     os.makedirs(output_dir, exist_ok=True)
 
     temp_dir = tempfile.mkdtemp()
