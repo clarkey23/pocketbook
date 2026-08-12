@@ -266,13 +266,35 @@ def make_booklet(source: str, output_dir: Optional[str] = None, css_file: str = 
         shutil.rmtree(unzip_dir, ignore_errors=True)
 
 
+def open_file(path: str) -> None:
+    if sys.platform == "darwin":
+        os.system(f'open "{path}"')
+    elif sys.platform.startswith("linux"):
+        os.system(f'xdg-open "{path}" >/dev/null 2>&1 &')
+    elif sys.platform == "win32":
+        os.startfile(path)  # type: ignore[attr-defined]
+
+
 def main():
-    if len(sys.argv) != 2:
-        print("Usage: ./pocketbook.py <zip_path_or_url>")
+    if len(sys.argv) > 2:
+        print("Usage: ./pocketbook.py [gutenberg_url_or_zip]")
         sys.exit(1)
+
+    if len(sys.argv) == 2:
+        source = sys.argv[1].strip()
+    else:
+        try:
+            source = input("Paste Gutenberg link: ").strip()
+        except EOFError:
+            source = ""
+        if not source:
+            print("No link provided.")
+            sys.exit(1)
+
     try:
-        path = make_booklet(sys.argv[1])
-        print(path)
+        path = make_booklet(source)
+        print(f"Booklet ready: {path}")
+        open_file(path)
     except PocketbookError as e:
         print(f"Error: {e}")
         sys.exit(1)

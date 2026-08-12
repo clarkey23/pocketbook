@@ -3,7 +3,3 @@ weasyprint
 PyPDF2
 bs4
 ebooklib
-fastapi
-uvicorn[standard]
-python-multipart
-jinja2

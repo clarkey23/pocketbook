@@ -42,31 +42,34 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Web UI
+### Run
 
 ```
 source venv/bin/activate
-python app.py
+./pocketbook.py
 ```
 
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765), paste a Gutenberg ebook page or HTML zip URL, download the booklet PDF.
+Paste a Gutenberg ebook page or HTML zip URL when prompted. The booklet PDF is created and opened.
 
-### Run (CLI)
+Or pass the link directly:
+
+```
+./pocketbook.py https://www.gutenberg.org/ebooks/36
+```
 
 Copy the book's "Download HTML (zip)" url from Project Gutenberg:
 
 <img src="site/copy-link.png" width=50%>
 
-Run the python script on the download link:
+Example output:
 
 ```
-./pocketbook.py https://www.gutenberg.org/cache/epub/36/pg36-h.zip
-
 ## Extracted to: /tmp/tmpzpp6533v
 ## Creating pdf /tmp/tmpzpp6533v/pg36-images.pdf
 ## Done.
 ## Creating booklet ...
 ## Booklet PDF created: The_War_of_the_Worlds-booklet.pdf
+## Booklet ready: /.../The_War_of_the_Worlds-booklet.pdf
 ```
 
 (Alternatively, download the zip file and run the script on the local file `./pocketbook.py path/to/downloaded/pg36-h.zip`)
