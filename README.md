@@ -1,19 +1,46 @@
-# PocketBook - Print & fold your own pocket-sized Gutenberg classics
+# PocketBook
 
-Turn [Project Gutenberg](https://www.gutenberg.org/) books into very compact versions, to print on standard A4, fold to pocket size, and carry around to read anywhere.
+Mac app that turns [Project Gutenberg](https://www.gutenberg.org/) books into pocket-sized, foldable A4 booklets.
 
-The python script downloads the html version of a book and converts it into a pdf with minimised margins, tiny font size, no page breaks etc to fit as much text on paper as possible.
-
-The minified pages are arranged to be printed on standard office paper and folded into a booklet the size of a credit card.
+Paste a Gutenberg link → get a PDF in Downloads → print single-sided → fold.
 
 <img src="site/pocketbook.jpg" width=50%>
 
 ---
 
+## About this fork
+
+This is a **maintained fork** of [sieste/pocketbook](https://github.com/sieste/pocketbook).
+
+The original project is a Python CLI. This fork adds:
+
+- A standalone **Mac app** (no Terminal, no Homebrew for end users)
+- In-window progress checklist
+- Gutenberg ebook page URLs (not only zip links)
+- Faster text-only conversion (images skipped)
+- Source Sans 3 as the default font
+- Saves to Downloads
+
+Upstream credit: [@sieste](https://github.com/sieste).
+
+---
+
+## Download (Mac)
+
+1. Grab the latest **PocketBook-macOS.zip** from [Releases](https://github.com/clarkey23/pocketbook/releases)
+2. Unzip and drag **PocketBook.app** to Applications
+3. Open it (right-click → Open the first time if macOS warns about an unidentified developer)
+4. Optional: keep it in the Dock
+
+Paste a Gutenberg ebook link (example: `https://www.gutenberg.org/ebooks/36`). The PDF lands in **Downloads**.
+
+Print **single-sided A4 at 100%**, then fold using the zine fold below.
+
+---
+
 ## Sample books
 
-The [books](books/) directory contains a few books ready to print (see below for folding instructions)
-
+Ready-to-print PDFs in [books/](books/):
 
 - [Lewis Carroll: Alice's Adventures in Wonderland](books/Alice_s_Adventures_in_Wonderland-booklet.pdf)
 - [HG Wells: The War of the Worlds](books/The_War_of_the_Worlds-booklet.pdf)
@@ -22,90 +49,62 @@ The [books](books/) directory contains a few books ready to print (see below for
 
 ---
 
+## Develop / build from source
 
-## Make your own pocket book
-
-### Install
-
-```
+```bash
 git clone https://github.com/clarkey23/pocketbook.git
 cd pocketbook
-```
-
-#### Mac Dock app (easiest)
-
-Needs [Homebrew](https://brew.sh) first.
-
-```
-brew install pango
-./install-mac-app.sh
-```
-
-That builds **PocketBook.app** in `~/Applications`. Open it, then right-click the Dock icon → **Options → Keep in Dock**.
-
-Paste a Gutenberg link when prompted. PDFs land in **Downloads**. Images are skipped so long books stay fast.
-
-#### Command line
-
-```
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-brew install pango   # macOS / WeasyPrint
+brew install pango   # build machine only
 ```
 
-### Run (CLI)
+### Run the GUI from source
 
-```
+```bash
 source venv/bin/activate
-./pocketbook.py
+python mac/gui.py
 ```
 
-Paste a Gutenberg ebook page or HTML zip URL when prompted. The booklet PDF is created and opened.
+### Run the CLI
 
-Or pass the link directly:
-
-```
+```bash
 ./pocketbook.py https://www.gutenberg.org/ebooks/36
 ```
 
-Copy the book's "Download HTML (zip)" url from Project Gutenberg:
+### Build the standalone Mac app
 
-<img src="site/copy-link.png" width=50%>
+On an Apple Silicon Mac with Homebrew + pango installed:
 
-Example output:
-
-```
-## Extracted to: /tmp/tmpzpp6533v
-## Creating pdf /tmp/tmpzpp6533v/pg36-images.pdf
-## Done.
-## Creating booklet ...
-## Booklet PDF created: The_War_of_the_Worlds-booklet.pdf
-## Booklet ready: /.../The_War_of_the_Worlds-booklet.pdf
+```bash
+./build-standalone-app.sh
+open dist/PocketBook.app
 ```
 
-(Alternatively, download the zip file and run the script on the local file `./pocketbook.py path/to/downloaded/pg36-h.zip`)
+That produces `dist/PocketBook.app` and `dist/PocketBook-macOS.zip` for GitHub Releases.
 
-### Print & Fold
+---
 
-Print out on regular A4 office paper (one- or two-sided, margins as small as possible). Then cut & fold each page using the "zine fold":
+## Print & fold
+
+Print on regular A4 (single-sided, margins as small as possible). Cut & fold each sheet with the zine fold:
 
 <img src="site/booklet-fold.png" width=50%>
 
-(Printing two-sided creates smaller books but you have to re-fold after reading 8 pages.)
+(Two-sided printing is possible but you re-fold after every 8 pages.)
 
-### Make a sleeve
+### Sleeve
 
-I use recycled cardboard and string to bind my pocket book. Just slide the individual booklets through loops of string wrapped around the cardboard sleeve like this:
+Recycled cardboard + string works well as a sleeve:
 
 <img src="site/sleeve.png" width=70%>
-
 
 ---
 
 ## License
 
 - [MIT License](LICENSE)
-- [Gutenberg Project: Permissions, Licensing and other Common Requests](https://www.gutenberg.org/policy/permission.html)
-
-
+- Based on [sieste/pocketbook](https://github.com/sieste/pocketbook) (MIT)
+- [Source Sans 3](fonts/README.md) (SIL OFL 1.1)
+- [Gutenberg Project permissions](https://www.gutenberg.org/policy/permission.html)

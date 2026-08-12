@@ -3,19 +3,41 @@
 import sys
 import os
 
-# WeasyPrint needs Homebrew Pango/GLib on macOS; make libs discoverable before import.
-_homebrew_lib = "/opt/homebrew/lib"
-if sys.platform == "darwin" and os.path.isdir(_homebrew_lib):
-    _fallback = os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
-    if _homebrew_lib not in _fallback.split(":"):
-        os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = (
-            f"{_homebrew_lib}:{_fallback}" if _fallback else _homebrew_lib
-        )
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+# WeasyPrint needs Pango/GLib. Prefer libs bundled inside the .app, then Homebrew.
+def _configure_native_libs():
+    if sys.platform != "darwin":
+        return
+    candidates = []
+    exe = os.path.abspath(sys.executable)
+    for rel in (
+        os.path.join(os.path.dirname(exe), "..", "Frameworks"),
+        os.path.join(os.path.dirname(exe), "..", "Resources", "lib"),
+        os.path.join(ROOT_DIR, "..", "Frameworks"),
+        os.path.join(ROOT_DIR, "Frameworks"),
+        "/opt/homebrew/lib",
+        "/usr/local/lib",
+    ):
+        path = os.path.abspath(rel)
+        if os.path.isdir(path) and path not in candidates:
+            candidates.append(path)
+    if not candidates:
+        return
+    existing = os.environ.get("DYLD_FALLBACK_LIBRARY_PATH", "")
+    parts = [p for p in existing.split(":") if p]
+    for path in reversed(candidates):
+        if path not in parts:
+            parts.insert(0, path)
+    os.environ["DYLD_FALLBACK_LIBRARY_PATH"] = ":".join(parts)
+
+
+_configure_native_libs()
 
 import tempfile
 import urllib.request
 import zipfile
-import subprocess
 import time
 from weasyprint import HTML, CSS
 from PyPDF2 import PdfReader, PdfWriter
@@ -25,57 +47,43 @@ import math
 from bs4 import BeautifulSoup
 import re
 from urllib.parse import urlparse
-from typing import Optional
+from typing import Callable, Optional
 
 
 class PocketbookError(Exception):
     """Raised when booklet conversion fails."""
 
 
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_CSS = os.path.join(ROOT_DIR, "css", "pocketbook.css")
-STATUS_PATH = os.path.join(
-    os.path.expanduser("~"),
-    "Library",
-    "Application Support",
-    "PocketBook",
-    "status.txt",
-)
 
 # stage_num, total_stages, message
 _TOTAL_STAGES = 6
+STAGES = [
+    (1, "Download"),
+    (2, "Extract"),
+    (3, "Prepare text"),
+    (4, "Create PDF"),
+    (5, "Impose booklet"),
+    (6, "Save to Downloads"),
+]
+
+_progress_callback: Optional[Callable[[int, str], None]] = None
+
+
+def set_progress_callback(callback: Optional[Callable[[int, str], None]]) -> None:
+    """GUI/apps register here to receive live stage updates."""
+    global _progress_callback
+    _progress_callback = callback
 
 
 def write_status(stage: int, message: str) -> None:
-    """Publish progress for the Mac app progress window + stdout."""
-    line = f"{stage}/{_TOTAL_STAGES}|{message}"
+    """Publish progress to stdout and any registered UI callback."""
     print(message, flush=True)
-    try:
-        os.makedirs(os.path.dirname(STATUS_PATH), exist_ok=True)
-        with open(STATUS_PATH, "w", encoding="utf-8") as f:
-            f.write(line)
-    except OSError:
-        pass
-    if sys.platform == "darwin":
-        # Lightweight notification so Dock-app users see movement.
-        safe = message.replace('"', '\\"')
-        subprocess.Popen(
-            [
-                "osascript",
-                "-e",
-                f'display notification "{safe}" with title "PocketBook" subtitle "Step {stage} of {_TOTAL_STAGES}"',
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-
-def clear_status() -> None:
-    try:
-        if os.path.exists(STATUS_PATH):
-            os.remove(STATUS_PATH)
-    except OSError:
-        pass
+    if _progress_callback is not None:
+        try:
+            _progress_callback(stage, message)
+        except Exception:
+            pass
 
 
 def is_url(path):

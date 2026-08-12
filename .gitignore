@@ -3,4 +3,6 @@ venv
 site/*.xcf
 *-booklet.pdf
 !books/*-booklet.pdf
+dist/
+.cache/
 
