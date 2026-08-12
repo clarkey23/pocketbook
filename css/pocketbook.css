@@ -1,3 +1,17 @@
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("../fonts/SourceSans3-Var.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Source Sans 3";
+  src: url("../fonts/SourceSans3-Italic-Var.ttf") format("truetype");
+  font-weight: 100 900;
+  font-style: italic;
+}
+
 @page {
     size: 75mm 105mm; /* 16 pages per sheet */
     margin: 1mm; 
@@ -10,6 +24,7 @@
 
 html, body {
   margin: 0px !important;
+  font-family: "Source Sans 3", sans-serif !important;
   font-size: 7pt !important;
   line-height: 1.0 !important;
   text-align: justify !important;
@@ -17,8 +32,8 @@ html, body {
 }
 
 div.chapter {
-  page-break-before: avoid !important;
-  margin-top: 0mm !important;
+    page-break-before: avoid !important;
+    margin-top: 0mm !important;
 }
 
 h2 {
@@ -46,4 +61,3 @@ p {
 img, svg, picture, object, embed, video, audio, iframe {
   display: none !important;
 }
-

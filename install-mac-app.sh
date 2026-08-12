@@ -22,6 +22,7 @@ mkdir -p "$SUPPORT" "$APP_DIR"
 rsync -a --delete \
   "$PROJ/pocketbook.py" \
   "$PROJ/css" \
+  "$PROJ/fonts" \
   "$PROJ/requirements.txt" \
   "$SUPPORT/"
 
