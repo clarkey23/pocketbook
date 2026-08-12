@@ -42,7 +42,16 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Run
+### Web UI
+
+```
+source venv/bin/activate
+python app.py
+```
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765), paste a Gutenberg ebook page or HTML zip URL, download the booklet PDF.
+
+### Run (CLI)
 
 Copy the book's "Download HTML (zip)" url from Project Gutenberg:
 

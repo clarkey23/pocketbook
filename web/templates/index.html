@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PocketBook</title>
+  <link rel="preconnect" href="https://fonts.bunny.net" />
+  <link href="https://fonts.bunny.net/css?family=figtree:400,500,600|newsreader:500,600,700" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <main class="stage">
+    <section class="panel">
+      <p class="brand">PocketBook</p>
+      <h1>Paste a Gutenberg link.<br />Print a pocket classic.</h1>
+      <p class="lede">Turns a Project Gutenberg HTML download into an A4 zine PDF you can fold to credit-card size.</p>
+
+      <form id="convert-form" class="form" novalidate>
+        <label for="url">Gutenberg link</label>
+        <input
+          id="url"
+          name="url"
+          type="url"
+          required
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="https://www.gutenberg.org/ebooks/36"
+        />
+        <p class="hint">Ebook page or HTML zip URL works.</p>
+        <p id="error" class="error" hidden></p>
+        <button id="submit" type="submit">
+          <span class="btn-label">Make booklet</span>
+          <span class="btn-busy" hidden>Making booklet…</span>
+        </button>
+      </form>
+
+      <p class="print-note">Print single-sided A4 at 100%. Cut the centre slit, then fold.</p>
+    </section>
+
+    <aside class="visual" aria-hidden="true">
+      <img src="/site/pocketbook.jpg" alt="" width="1200" height="900" />
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

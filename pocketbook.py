@@ -22,33 +22,84 @@ import shutil
 import math
 from bs4 import BeautifulSoup
 import re
+from urllib.parse import urlparse
+from typing import Optional
+
+
+class PocketbookError(Exception):
+    """Raised when booklet conversion fails."""
+
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_CSS = os.path.join(ROOT_DIR, "css", "pocketbook.css")
+
 
 def is_url(path):
-    return path.startswith(('http://', 'https://'))
+    return path.startswith(("http://", "https://"))
+
+
+def normalize_gutenberg_source(source: str) -> str:
+    """Accept a HTML-zip URL, local zip, or Gutenberg ebook page URL."""
+    source = source.strip()
+    if not is_url(source):
+        return source
+
+    parsed = urlparse(source)
+    host = (parsed.netloc or "").lower()
+    path = parsed.path or ""
+
+    if not host.endswith("gutenberg.org"):
+        return source
+
+    # Already a zip download
+    if path.lower().endswith(".zip"):
+        return source
+
+    # https://www.gutenberg.org/ebooks/36
+    m = re.search(r"/ebooks/(\d+)/?$", path)
+    if m:
+        book_id = m.group(1)
+        return f"https://www.gutenberg.org/cache/epub/{book_id}/pg{book_id}-h.zip"
+
+    # https://www.gutenberg.org/files/36/36-h.zip already covered by .zip
+    # https://www.gutenberg.org/cache/epub/36/pg36-images.html → zip sibling
+    m = re.search(r"/cache/epub/(\d+)/", path)
+    if m:
+        book_id = m.group(1)
+        return f"https://www.gutenberg.org/cache/epub/{book_id}/pg{book_id}-h.zip"
+
+    return source
+
 
 def download_zip(url, dest_dir):
     try:
-        local_path = os.path.join(dest_dir, os.path.basename(url))
-        urllib.request.urlretrieve(url, local_path)
+        basename = os.path.basename(urlparse(url).path) or "book.zip"
+        if not basename.lower().endswith(".zip"):
+            basename = "book.zip"
+        local_path = os.path.join(dest_dir, basename)
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "PocketBook/1.0 (+local converter)"},
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp, open(local_path, "wb") as out:
+            shutil.copyfileobj(resp, out)
         return local_path
     except Exception as e:
-        print(f"Download failed: {e}")
-        sys.exit(1)
+        raise PocketbookError(f"Download failed: {e}") from e
+
 
 def unzip_file(zip_path, dest_dir):
     try:
-        with zipfile.ZipFile(zip_path, 'r') as z:
+        with zipfile.ZipFile(zip_path, "r") as z:
             z.extractall(dest_dir)
         print(f"Extracted to: {dest_dir}")
     except Exception as e:
-        print(f"Unzip failed: {e}")
-        sys.exit(1)
+        raise PocketbookError(f"Unzip failed: {e}") from e
 
 
 def guess_title(html_file):
     if not os.path.isfile(html_file):
-        print(f"Error: {html_file} not found.")
-        sys.exit(1)
+        raise PocketbookError(f"{html_file} not found.")
     with open(html_file, "r", encoding="utf-8") as f:
         soup = BeautifulSoup(f, "html.parser")
     title = None
@@ -61,26 +112,27 @@ def guess_title(html_file):
     html_name = os.path.splitext(os.path.basename(html_file))[0]
     if not title:
         title = html_name
-    safe_title = re.sub(r'[^0-9a-zA-Z]+', '_', title)
+    safe_title = re.sub(r"[^0-9a-zA-Z]+", "_", title)
     return safe_title
 
 
 def find_html_file(dir):
-    html_files = [f for f in os.listdir(dir) if f.lower().endswith('.html')]
+    html_files = [f for f in os.listdir(dir) if f.lower().endswith(".html")]
     if not html_files:
-        print(f"Error: No HTML file found in {dir}.")
-        sys.exit(1)
-    html_path = os.path.join(dir, html_files[0])
-    return html_path
+        # Sometimes nested in a subfolder
+        for root, _, files in os.walk(dir):
+            for f in files:
+                if f.lower().endswith(".html"):
+                    return os.path.join(root, f)
+        raise PocketbookError(f"No HTML file found in {dir}.")
+    return os.path.join(dir, html_files[0])
 
 
-def convert_html_to_pdf(html_file, css_file = 'css/pocketbook.css'):
+def convert_html_to_pdf(html_file, css_file=DEFAULT_CSS):
     if not os.path.isfile(html_file):
-        print(f"Error: {html_file} not found.")
-        sys.exit(1)
+        raise PocketbookError(f"{html_file} not found.")
     if not os.path.isfile(css_file):
-        print(f"Error: {css_path} not found.")
-        sys.exit(1)
+        raise PocketbookError(f"{css_file} not found.")
     output_pdf = os.path.splitext(html_file)[0] + ".pdf"
     print(f"Creating pdf {output_pdf}")
     HTML(html_file).write_pdf(output_pdf, stylesheets=[CSS(css_file)])
@@ -112,7 +164,7 @@ def reorder_pages_for_booklet(input_pdf, output_pdf):
     for i in range(0, total_pages, 8):
         indices = [
             i + 1, i, i + 2, i + 7,
-            i + 3, i + 6, i + 4, i + 5
+            i + 3, i + 6, i + 4, i + 5,
         ]
         for idx in indices:
             if idx < total_pages:
@@ -128,77 +180,103 @@ def nup_2x4(input_pdf, output_pdf, title=""):
     pw, ph = fitz.paper_size("a4")
     cols, rows = 2, 4
     cell_w, cell_h = pw / cols, ph / rows
-    marksize = 5
     npages = len(src)
-    nsheets = math.ceil(npages // 8)
+    nsheets = math.ceil(npages / 8) if npages else 0
     trunc_width = 30
     trunc_title = f"{title[:trunc_width-3] + '...' if len(title) > trunc_width else title:<{trunc_width}}"
     for i in range(0, len(src), 8):
-      page = out.new_page(width=pw, height=ph)
-      for j in range(8):
-        idx = i + j
-        if idx >= len(src):
-            break
-        src_page = src[idx]
-        x = (j % 2) * cell_w
-        y = (j // 2) * cell_h
-        rect = fitz.Rect(x, y, x + cell_w, y + cell_h)
-        rotation = [270, 90][j % 2]
-        page.show_pdf_page(
-          rect, src, idx,
-          rotate=rotation,
-          keep_proportion=True,
-          clip=None
-        )
-        page.draw_rect(rect, color=(0, 0, 0), width=0.5)
-        if j == 0:
-          page.insert_text((pw-3, 20), f"{int(i/8) + 1}/{nsheets}", 
-                           rotate=90, fontsize=5, 
-                           color=(.4,.4,.4), fontname='helv')
-          page.insert_text((pw-3, cell_h-3), f"{trunc_title}", 
-                           rotate=90, fontsize=5, 
-                           color=(.4,.4,.4), fontname='helv')
+        page = out.new_page(width=pw, height=ph)
+        for j in range(8):
+            idx = i + j
+            if idx >= len(src):
+                break
+            x = (j % 2) * cell_w
+            y = (j // 2) * cell_h
+            rect = fitz.Rect(x, y, x + cell_w, y + cell_h)
+            rotation = [270, 90][j % 2]
+            page.show_pdf_page(
+                rect, src, idx,
+                rotate=rotation,
+                keep_proportion=True,
+                clip=None,
+            )
+            page.draw_rect(rect, color=(0, 0, 0), width=0.5)
+            if j == 0:
+                page.insert_text(
+                    (pw - 3, 20), f"{int(i / 8) + 1}/{nsheets}",
+                    rotate=90, fontsize=5,
+                    color=(0.4, 0.4, 0.4), fontname="helv",
+                )
+                page.insert_text(
+                    (pw - 3, cell_h - 3), f"{trunc_title}",
+                    rotate=90, fontsize=5,
+                    color=(0.4, 0.4, 0.4), fontname="helv",
+                )
     out.save(output_pdf)
     out.close()
     src.close()
+
 
 def process_booklet_pdf(input_pdf, output_pdf, title=""):
     print("Creating booklet ...")
     tmp1 = tempfile.mktemp(suffix=".pdf")
     tmp2 = tempfile.mktemp(suffix=".pdf")
-    pad_pdf_to_multiple_of_8(input_pdf, tmp1)
-    reorder_pages_for_booklet(tmp1, tmp2)
-    nup_2x4(tmp2, output_pdf, title)
-    os.remove(tmp1)
-    os.remove(tmp2)
+    try:
+        pad_pdf_to_multiple_of_8(input_pdf, tmp1)
+        reorder_pages_for_booklet(tmp1, tmp2)
+        nup_2x4(tmp2, output_pdf, title)
+    finally:
+        for path in (tmp1, tmp2):
+            if os.path.exists(path):
+                os.remove(path)
     print(f"Booklet PDF created: {output_pdf}")
+
+
+def make_booklet(source: str, output_dir: Optional[str] = None, css_file: str = DEFAULT_CSS) -> str:
+    """
+    Convert a Gutenberg HTML zip (URL or local path) into a pocket booklet PDF.
+
+    Returns the absolute path to the generated booklet PDF.
+    """
+    source = normalize_gutenberg_source(source)
+    output_dir = output_dir or os.getcwd()
+    os.makedirs(output_dir, exist_ok=True)
+
+    temp_dir = tempfile.mkdtemp()
+    unzip_dir = tempfile.mkdtemp()
+    try:
+        if is_url(source):
+            zip_path = download_zip(source, temp_dir)
+        elif os.path.isfile(source) and source.lower().endswith(".zip"):
+            zip_path = source
+        else:
+            raise PocketbookError(
+                "Provide a Gutenberg HTML zip URL, ebook page URL, or local .zip file."
+            )
+
+        unzip_file(zip_path, unzip_dir)
+        html_file = find_html_file(unzip_dir)
+        pdf_filename = convert_html_to_pdf(html_file, css_file)
+        title = guess_title(html_file)
+        booklet_filename = os.path.join(output_dir, f"{title}-booklet.pdf")
+        process_booklet_pdf(pdf_filename, booklet_filename, title)
+        return os.path.abspath(booklet_filename)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        shutil.rmtree(unzip_dir, ignore_errors=True)
 
 
 def main():
     if len(sys.argv) != 2:
         print("Usage: ./pocketbook.py <zip_path_or_url>")
         sys.exit(1)
-    arg = sys.argv[1]
-    temp_dir = tempfile.mkdtemp()
-    if is_url(arg):
-        zip_path = download_zip(arg, temp_dir)
-    elif os.path.isfile(arg) and arg.lower().endswith('.zip'):
-        zip_path = arg
-    else:
-        print("Error: Argument must be a local .zip file or a URL to a .zip file.")
+    try:
+        path = make_booklet(sys.argv[1])
+        print(path)
+    except PocketbookError as e:
+        print(f"Error: {e}")
         sys.exit(1)
-    unzip_dir = tempfile.mkdtemp()
-    unzip_file(zip_path, unzip_dir)
-    html_file = find_html_file(unzip_dir)
-    pdf_filename = convert_html_to_pdf(html_file, 'css/pocketbook.css')
-    title = guess_title(html_file)
-    booklet_filename = title + '-booklet.pdf'
-    process_booklet_pdf(pdf_filename, booklet_filename, title)
-    shutil.rmtree(temp_dir)
-    shutil.rmtree(unzip_dir)
 
 
 if __name__ == "__main__":
     main()
-
-

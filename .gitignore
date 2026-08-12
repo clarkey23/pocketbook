@@ -1,4 +1,6 @@
 legacy
 venv
 site/*.xcf
+*-booklet.pdf
+!books/*-booklet.pdf
 
