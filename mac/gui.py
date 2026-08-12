@@ -5,7 +5,7 @@ import os
 import sys
 import threading
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 
 # Ensure app-local modules resolve when launched from the .app bundle.
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -26,10 +26,12 @@ from pocketbook import (  # noqa: E402
 
 
 INK = "#15261c"
-PAPER = "#e6e4df"
-MOSS = "#3d6b4f"
-MUTED = "#5c6f63"
+PAPER = "#f2f0ea"
+MOSS = "#2f5440"
+MOSS_HOVER = "#3d6b4f"
+MUTED = "#4a5c52"
 ERROR = "#a84832"
+BUTTON_TEXT = "#ffffff"
 
 
 class PocketBookApp(tk.Tk):
@@ -37,24 +39,20 @@ class PocketBookApp(tk.Tk):
         super().__init__()
         self.title("PocketBook")
         self.configure(bg=PAPER)
-        self.resizable(False, False)
+        self.resizable(True, True)
         self.busy = False
 
-        # Keep window responsive / above beach-ball feel
-        self.update_idletasks()
-
-        pad = {"padx": 22, "pady": 0}
         outer = tk.Frame(self, bg=PAPER)
-        outer.pack(fill="both", expand=True, padx=0, pady=0)
+        outer.pack(fill="both", expand=True, padx=24, pady=20)
 
         tk.Label(
             outer,
             text="PocketBook",
-            font=("Helvetica Neue", 28, "bold"),
+            font=("Helvetica Neue", 26, "bold"),
             fg=INK,
             bg=PAPER,
             anchor="w",
-        ).pack(fill="x", padx=22, pady=(20, 4))
+        ).pack(fill="x", pady=(0, 4))
 
         tk.Label(
             outer,
@@ -63,9 +61,9 @@ class PocketBookApp(tk.Tk):
             fg=MUTED,
             bg=PAPER,
             anchor="w",
-            wraplength=420,
+            wraplength=400,
             justify="left",
-        ).pack(fill="x", padx=22, pady=(0, 16))
+        ).pack(fill="x", pady=(0, 16))
 
         tk.Label(
             outer,
@@ -74,22 +72,23 @@ class PocketBookApp(tk.Tk):
             fg=INK,
             bg=PAPER,
             anchor="w",
-        ).pack(fill="x", **pad)
+        ).pack(fill="x")
 
         self.url_var = tk.StringVar()
         self.url_entry = tk.Entry(
             outer,
             textvariable=self.url_var,
             font=("Helvetica Neue", 14),
-            bg="white",
+            bg="#ffffff",
             fg=INK,
+            insertbackground=INK,
             relief="solid",
             bd=1,
-            highlightthickness=1,
+            highlightthickness=2,
             highlightbackground="#c9c5bc",
             highlightcolor=MOSS,
         )
-        self.url_entry.pack(fill="x", padx=22, pady=(6, 4), ipady=8)
+        self.url_entry.pack(fill="x", pady=(6, 4), ipady=9)
         self.url_entry.focus_set()
 
         tk.Label(
@@ -99,27 +98,26 @@ class PocketBookApp(tk.Tk):
             fg=MUTED,
             bg=PAPER,
             anchor="w",
-        ).pack(fill="x", padx=22, pady=(0, 14))
+        ).pack(fill="x", pady=(0, 14))
 
-        self.button = tk.Button(
+        # macOS tk.Button ignores bg/fg — use a Label "button" instead.
+        self.button = tk.Label(
             outer,
-            text="Make booklet",
+            text="  Make booklet  ",
             font=("Helvetica Neue", 14, "bold"),
-            fg="#f4f7f4",
+            fg=BUTTON_TEXT,
             bg=MOSS,
-            activebackground="#2f5440",
-            activeforeground="#f4f7f4",
-            relief="flat",
-            padx=16,
-            pady=10,
+            padx=18,
+            pady=12,
             cursor="hand2",
-            command=self.on_make,
         )
-        self.button.pack(anchor="w", padx=22, pady=(0, 18))
+        self.button.pack(anchor="w", pady=(0, 18))
+        self.button.bind("<Button-1>", self._on_button_press)
+        self.button.bind("<Enter>", self._on_button_enter)
+        self.button.bind("<Leave>", self._on_button_leave)
 
-        # Checklist
         check_frame = tk.Frame(outer, bg=PAPER)
-        check_frame.pack(fill="x", padx=22, pady=(0, 8))
+        check_frame.pack(fill="x", pady=(0, 8))
         tk.Label(
             check_frame,
             text="Progress",
@@ -164,17 +162,38 @@ class PocketBookApp(tk.Tk):
             fg=MUTED,
             bg=PAPER,
             anchor="w",
-            wraplength=420,
+            wraplength=400,
             justify="left",
         )
-        self.detail.pack(fill="x", padx=22, pady=(12, 22))
+        self.detail.pack(fill="x", pady=(14, 8))
 
         self.bind("<Return>", lambda _e: self.on_make())
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        # Size for a compact tool window
-        self.geometry("460x520")
-        self.minsize(420, 480)
+        # Size to content so the bottom status line is never clipped.
+        self.update_idletasks()
+        req_w = max(460, outer.winfo_reqwidth() + 48)
+        req_h = outer.winfo_reqheight() + 48
+        self.geometry(f"{req_w}x{req_h}")
+        self.minsize(440, req_h)
+
+    def _on_button_enter(self, _event=None):
+        if not self.busy:
+            self.button.configure(bg=MOSS_HOVER)
+
+    def _on_button_leave(self, _event=None):
+        if not self.busy:
+            self.button.configure(bg=MOSS)
+
+    def _on_button_press(self, _event=None):
+        self.on_make()
+
+    def set_button_busy(self, busy: bool):
+        self.busy = busy
+        if busy:
+            self.button.configure(text="  Working…  ", bg="#7a8f82", fg="#ffffff", cursor="watch")
+        else:
+            self.button.configure(text="  Make booklet  ", bg=MOSS, fg=BUTTON_TEXT, cursor="hand2")
 
     def reset_checklist(self):
         for num, _ in STAGES:
@@ -182,7 +201,6 @@ class PocketBookApp(tk.Tk):
             self.stage_labels[num].configure(fg=MUTED)
 
     def set_stage(self, stage: int, message: str):
-        # Completed stages
         for num, _ in STAGES:
             if 0 < num < stage:
                 self.stage_vars[num].configure(text="✓", fg=MOSS)
@@ -190,8 +208,6 @@ class PocketBookApp(tk.Tk):
             elif num == stage and stage > 0:
                 self.stage_vars[num].configure(text="●", fg=MOSS)
                 self.stage_labels[num].configure(fg=INK)
-            elif stage == 0:
-                pass
             else:
                 self.stage_vars[num].configure(text="○", fg=MUTED)
                 self.stage_labels[num].configure(fg=MUTED)
@@ -203,7 +219,6 @@ class PocketBookApp(tk.Tk):
         self.detail.configure(fg=INK if stage > 0 else MUTED)
 
     def on_progress(self, stage: int, message: str):
-        # Marshal UI updates onto the Tk thread
         self.after(0, lambda: self.set_stage(stage, message))
 
     def on_make(self):
@@ -216,8 +231,7 @@ class PocketBookApp(tk.Tk):
             self.url_entry.focus_set()
             return
 
-        self.busy = True
-        self.button.configure(state="disabled", text="Working…")
+        self.set_button_busy(True)
         self.url_entry.configure(state="disabled")
         self.reset_checklist()
         self.detail_var.set("Starting…")
@@ -238,18 +252,16 @@ class PocketBookApp(tk.Tk):
         threading.Thread(target=worker, daemon=True).start()
 
     def on_success(self, path: str):
-        self.busy = False
-        self.button.configure(state="normal", text="Make booklet")
+        self.set_button_busy(False)
         self.url_entry.configure(state="normal")
-        self.set_stage(6, f"Done — saved to Downloads\n{os.path.basename(path)}")
+        self.set_stage(6, f"Done - saved to Downloads\n{os.path.basename(path)}")
         try:
             open_file(path)
         except Exception:
             pass
 
     def on_failure(self, message: str):
-        self.busy = False
-        self.button.configure(state="normal", text="Make booklet")
+        self.set_button_busy(False)
         self.url_entry.configure(state="normal")
         self.detail_var.set(message)
         self.detail.configure(fg=ERROR)
