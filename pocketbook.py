@@ -183,8 +183,28 @@ def find_html_file(dir):
     return os.path.join(dir, html_files[0])
 
 
+def _is_page_reference(text: str) -> bool:
+    """True for TOC/index page markers like '12', 'iv', 'p. 3', '[45]'."""
+    t = (text or "").strip()
+    if not t:
+        return True
+    compact = re.sub(r"[\s\[\]\(\)\.,;:_pPgeéaá]+", "", t)
+    if not compact:
+        return True
+    if re.fullmatch(r"\d+([-\u2013\u2014]\d+)?", compact):
+        return True
+    if re.fullmatch(r"[ivxlcdmIVXLCDM]+", compact):
+        return True
+    return False
+
+
+def _strip_trailing_page_number(text: str) -> str:
+    """Remove trailing TOC page numbers: 'Chapter I ..... 12' → 'Chapter I'."""
+    return re.sub(r"[\s\.\u00b7\u2022\-_]*\d+\s*$", "", (text or "").strip()).strip()
+
+
 def prepare_html_for_fast_print(html_file):
-    """Strip images, links, and Gutenberg chrome so WeasyPrint stays fast and clean."""
+    """Strip images, page-ref links, and Gutenberg chrome for clean pocket PDFs."""
     with open(html_file, "r", encoding="utf-8", errors="ignore") as f:
         soup = BeautifulSoup(f, "html.parser")
 
@@ -195,8 +215,20 @@ def prepare_html_for_fast_print(html_file):
     for tag in soup.find_all(["img", "svg", "picture", "source", "object", "embed", "video", "audio", "iframe"]):
         tag.decompose()
 
-    # Keep link text, drop the hyperlink itself (no clickable URLs in the PDF).
-    for tag in soup.find_all("a"):
+    # TOC/index page numbers are wrong after reflow — delete those links.
+    # Keep real titles as plain text (unwrap), minus any trailing page number.
+    for tag in list(soup.find_all("a")):
+        text = tag.get_text(" ", strip=True)
+        if _is_page_reference(text):
+            tag.decompose()
+            continue
+        cleaned = _strip_trailing_page_number(text)
+        if not cleaned or _is_page_reference(cleaned):
+            tag.decompose()
+            continue
+        if cleaned != text:
+            tag.clear()
+            tag.append(cleaned)
         tag.unwrap()
 
     # Drop empty figures left behind after image removal.
