@@ -265,7 +265,7 @@ def nup_2x4(input_pdf, output_pdf, title=""):
     pw, ph = fitz.paper_size("a4")
     # Office printers (Officeworks etc.) cannot print to the paper edge.
     # Keep a safe margin so mini-pages are not clipped.
-    margin = 8 * 72 / 25.4  # 8mm in PDF points
+    margin = 5 * 72 / 25.4  # 5mm in PDF points
     cols, rows = 2, 4
     usable_w = pw - 2 * margin
     usable_h = ph - 2 * margin

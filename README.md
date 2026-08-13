@@ -90,7 +90,7 @@ That produces `dist/PocketBook.app` and `dist/PocketBook-macOS.zip` for GitHub R
 
 Print on regular A4, **single-sided**, **100% / actual size** (not “fit to page”).
 
-PocketBook PDFs include an 8mm margin so Officeworks-style printers don’t clip the edges.
+PocketBook PDFs include a 5mm margin so Officeworks-style printers don’t clip the edges.
 
 Then cut & fold each sheet with the zine fold:
 
