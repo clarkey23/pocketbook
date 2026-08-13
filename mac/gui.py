@@ -5,7 +5,7 @@ import os
 import sys
 import threading
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 
 # Ensure app-local modules resolve when launched from the .app bundle.
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -41,6 +41,39 @@ class PocketBookApp(tk.Tk):
         self.configure(bg=PAPER)
         self.resizable(True, True)
         self.busy = False
+
+        style = ttk.Style(self)
+        # clam honours background/foreground on macOS; aqua does not.
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+        style.configure(
+            "Pocket.TButton",
+            background=MOSS,
+            foreground=BUTTON_TEXT,
+            bordercolor=MOSS,
+            darkcolor=MOSS,
+            lightcolor=MOSS,
+            focuscolor=MOSS,
+            borderwidth=0,
+            focusthickness=0,
+            padding=(18, 12),
+            font=("Helvetica Neue", 14, "bold"),
+        )
+        style.map(
+            "Pocket.TButton",
+            background=[
+                ("pressed", "#243f32"),
+                ("active", MOSS_HOVER),
+                ("disabled", "#7a8f82"),
+            ],
+            foreground=[
+                ("disabled", "#ffffff"),
+                ("pressed", "#ffffff"),
+                ("active", "#ffffff"),
+            ],
+        )
 
         outer = tk.Frame(self, bg=PAPER)
         outer.pack(fill="both", expand=True, padx=24, pady=20)
@@ -100,21 +133,13 @@ class PocketBookApp(tk.Tk):
             anchor="w",
         ).pack(fill="x", pady=(0, 14))
 
-        # macOS tk.Button ignores bg/fg — use a Label "button" instead.
-        self.button = tk.Label(
+        self.button = ttk.Button(
             outer,
-            text="  Make booklet  ",
-            font=("Helvetica Neue", 14, "bold"),
-            fg=BUTTON_TEXT,
-            bg=MOSS,
-            padx=18,
-            pady=12,
-            cursor="hand2",
+            text="Make booklet",
+            style="Pocket.TButton",
+            command=self.on_make,
         )
         self.button.pack(anchor="w", pady=(0, 18))
-        self.button.bind("<Button-1>", self._on_button_press)
-        self.button.bind("<Enter>", self._on_button_enter)
-        self.button.bind("<Leave>", self._on_button_leave)
 
         check_frame = tk.Frame(outer, bg=PAPER)
         check_frame.pack(fill="x", pady=(0, 8))
@@ -170,30 +195,18 @@ class PocketBookApp(tk.Tk):
         self.bind("<Return>", lambda _e: self.on_make())
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-        # Size to content so the bottom status line is never clipped.
         self.update_idletasks()
         req_w = max(460, outer.winfo_reqwidth() + 48)
         req_h = outer.winfo_reqheight() + 48
         self.geometry(f"{req_w}x{req_h}")
         self.minsize(440, req_h)
 
-    def _on_button_enter(self, _event=None):
-        if not self.busy:
-            self.button.configure(bg=MOSS_HOVER)
-
-    def _on_button_leave(self, _event=None):
-        if not self.busy:
-            self.button.configure(bg=MOSS)
-
-    def _on_button_press(self, _event=None):
-        self.on_make()
-
     def set_button_busy(self, busy: bool):
         self.busy = busy
         if busy:
-            self.button.configure(text="  Working…  ", bg="#7a8f82", fg="#ffffff", cursor="watch")
+            self.button.configure(text="Working…", state="disabled")
         else:
-            self.button.configure(text="  Make booklet  ", bg=MOSS, fg=BUTTON_TEXT, cursor="hand2")
+            self.button.configure(text="Make booklet", state="normal")
 
     def reset_checklist(self):
         for num, _ in STAGES:
