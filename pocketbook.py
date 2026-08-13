@@ -184,7 +184,7 @@ def find_html_file(dir):
 
 
 def prepare_html_for_fast_print(html_file):
-    """Strip images and Gutenberg chrome so WeasyPrint stays fast and small."""
+    """Strip images, links, and Gutenberg chrome so WeasyPrint stays fast and clean."""
     with open(html_file, "r", encoding="utf-8", errors="ignore") as f:
         soup = BeautifulSoup(f, "html.parser")
 
@@ -194,6 +194,10 @@ def prepare_html_for_fast_print(html_file):
 
     for tag in soup.find_all(["img", "svg", "picture", "source", "object", "embed", "video", "audio", "iframe"]):
         tag.decompose()
+
+    # Keep link text, drop the hyperlink itself (no clickable URLs in the PDF).
+    for tag in soup.find_all("a"):
+        tag.unwrap()
 
     # Drop empty figures left behind after image removal.
     for tag in soup.find_all("figure"):
