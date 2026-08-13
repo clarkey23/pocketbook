@@ -263,8 +263,13 @@ def nup_2x4(input_pdf, output_pdf, title=""):
     src = fitz.open(input_pdf)
     out = fitz.open()
     pw, ph = fitz.paper_size("a4")
+    # Office printers (Officeworks etc.) cannot print to the paper edge.
+    # Keep a safe margin so mini-pages are not clipped.
+    margin = 8 * 72 / 25.4  # 8mm in PDF points
     cols, rows = 2, 4
-    cell_w, cell_h = pw / cols, ph / rows
+    usable_w = pw - 2 * margin
+    usable_h = ph - 2 * margin
+    cell_w, cell_h = usable_w / cols, usable_h / rows
     npages = len(src)
     nsheets = math.ceil(npages / 8) if npages else 0
     trunc_width = 30
@@ -275,8 +280,8 @@ def nup_2x4(input_pdf, output_pdf, title=""):
             idx = i + j
             if idx >= len(src):
                 break
-            x = (j % 2) * cell_w
-            y = (j // 2) * cell_h
+            x = margin + (j % 2) * cell_w
+            y = margin + (j // 2) * cell_h
             rect = fitz.Rect(x, y, x + cell_w, y + cell_h)
             rotation = [270, 90][j % 2]
             page.show_pdf_page(
@@ -287,13 +292,14 @@ def nup_2x4(input_pdf, output_pdf, title=""):
             )
             page.draw_rect(rect, color=(0, 0, 0), width=0.5)
             if j == 0:
+                label_x = pw - margin / 2
                 page.insert_text(
-                    (pw - 3, 20), f"{int(i / 8) + 1}/{nsheets}",
+                    (label_x, margin + 16), f"{int(i / 8) + 1}/{nsheets}",
                     rotate=90, fontsize=5,
                     color=(0.4, 0.4, 0.4), fontname="helv",
                 )
                 page.insert_text(
-                    (pw - 3, cell_h - 3), f"{trunc_title}",
+                    (label_x, margin + cell_h - 3), f"{trunc_title}",
                     rotate=90, fontsize=5,
                     color=(0.4, 0.4, 0.4), fontname="helv",
                 )
