@@ -210,13 +210,20 @@ async function mergeDocs(PDFDocument, fontkit, docs) {
 }
 
 /**
- * @param {Array} blocks
+ * @param {Array} bodyBlocks
  * @param {string} title
  * @param {Function} [onStatus]
  * @param {Array<{title:string,targetId:string}>} [tocEntries]
+ * @param {Array} [frontBlocks] title/author/publisher matter before CONTENTS
  * @returns {Promise<{ bytes: Uint8Array, filename: string }>}
  */
-export async function buildBookletPdf(blocks, title, onStatus, tocEntries = []) {
+export async function buildBookletPdf(
+  bodyBlocks,
+  title,
+  onStatus,
+  tocEntries = [],
+  frontBlocks = []
+) {
   onStatus?.(4, "Creating PDF…");
 
   const pdfLib = await import("https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm");
@@ -229,35 +236,43 @@ export async function buildBookletPdf(blocks, title, onStatus, tocEntries = []) 
     fetch(new URL("../fonts/WorkSans-Bold.ttf", import.meta.url)).then((r) => r.arrayBuffer()),
   ]);
 
-  // Pass 1: layout body and learn where each anchor lands.
-  const body = await layoutMiniPages(PDFDocument, fontkit, regularBytes, boldBytes, blocks);
+  // Pass 1: layout body alone (starts on its own page later) and map anchors.
+  const body = await layoutMiniPages(PDFDocument, fontkit, regularBytes, boldBytes, bodyBlocks);
   const resolved = resolveTocEntries(tocEntries, body.idToPage, body.headingPages);
 
-  const parts = [];
-  if (resolved.length) {
-    // Measure TOC length, then rebuild with body pages offset by that count.
-    // Repeat if wrapping changes when page numbers get wider (9 → 10, etc.).
-    let tocCount = 0;
-    let tocDoc = null;
-    for (let pass = 0; pass < 3; pass++) {
-      const entries = resolved.map((e) => ({
-        title: e.title,
-        page: e.bodyPage + tocCount,
-      }));
-      const toc = await layoutMiniPages(
+  // Pass 2: title/front matter + CONTENTS in one flow; page nums include that preamble.
+  let preamblePages = 0;
+  let preambleDoc = null;
+  const hasPreamble = frontBlocks.length > 0 || resolved.length > 0;
+
+  if (hasPreamble) {
+    for (let pass = 0; pass < 4; pass++) {
+      const tocBlocks = resolved.length
+        ? buildTocBlocks(
+            body.font,
+            resolved.map((e) => ({
+              title: e.title,
+              page: e.bodyPage + preamblePages,
+            })),
+            body.maxWidth
+          )
+        : [];
+      const preamble = await layoutMiniPages(
         PDFDocument,
         fontkit,
         regularBytes,
         boldBytes,
-        buildTocBlocks(body.font, entries, body.maxWidth)
+        [...frontBlocks, ...tocBlocks]
       );
-      const nextCount = toc.content.getPageCount();
-      tocDoc = toc.content;
-      if (nextCount === tocCount) break;
-      tocCount = nextCount;
+      const next = preamble.content.getPageCount();
+      preambleDoc = preamble.content;
+      if (next === preamblePages) break;
+      preamblePages = next;
     }
-    parts.push(tocDoc);
   }
+
+  const parts = [];
+  if (preambleDoc) parts.push(preambleDoc);
   parts.push(body.content);
 
   const content = await mergeDocs(PDFDocument, fontkit, parts);

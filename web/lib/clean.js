@@ -33,6 +33,14 @@ function isContentsHeading(text) {
   return /^(table of\s+)?contents$/i.test(normSpace(text));
 }
 
+function isIllustrationsHeading(text) {
+  return /^(list of\s+)?illustrations$/i.test(normSpace(text));
+}
+
+function isPgEditionPicker(text) {
+  return /several editions of this ebook/i.test(text || "");
+}
+
 function isPageRefText(text) {
   const t = normSpace(text);
   if (!t) return true;
@@ -103,13 +111,14 @@ function isTocLikeElement(el) {
 function findTocRegion(doc) {
   const skip = new Set();
   let roots = [];
+  let tocHeading = null;
 
-  const heading = [...doc.querySelectorAll("h1, h2, h3, h4, h5, h6")].find((h) =>
+  tocHeading = [...doc.querySelectorAll("h1, h2, h3, h4, h5, h6")].find((h) =>
     isContentsHeading(h.textContent)
   );
-  if (heading) {
-    skip.add(heading);
-    let el = heading.nextElementSibling;
+  if (tocHeading) {
+    skip.add(tocHeading);
+    let el = tocHeading.nextElementSibling;
     while (el) {
       if (/^H[1-6]$/.test(el.tagName)) break;
       // Body chapters are often wrapped in div.chapter — stop before them.
@@ -134,7 +143,72 @@ function findTocRegion(doc) {
     }
   }
 
-  return { roots, skip };
+  // Drop illustration indexes (images are stripped anyway).
+  const illusHeading = [...doc.querySelectorAll("h1, h2, h3, h4, h5, h6")].find((h) =>
+    isIllustrationsHeading(h.textContent)
+  );
+  if (illusHeading) {
+    skip.add(illusHeading);
+    let el = illusHeading.nextElementSibling;
+    while (el) {
+      if (/^H[1-6]$/.test(el.tagName)) break;
+      if (/\bchapter\b/i.test(el.getAttribute("class") || "")) break;
+      if (el.querySelector?.("h1, h2, h3, h4, h5, h6")) break;
+      if (!isTocLikeElement(el) && el.tagName !== "TABLE") break;
+      skip.add(el);
+      el = el.nextElementSibling;
+    }
+  }
+
+  return { roots, skip, tocHeading };
+}
+
+/** First real chapter/body marker after the title + contents. */
+function findBodyStart(doc, tocEntries, tocHeading) {
+  const targets = new Set((tocEntries || []).map((e) => e.targetId.toLowerCase()));
+
+  for (const h of doc.querySelectorAll("h1, h2, h3, h4, h5, h6")) {
+    if (isContentsHeading(h.textContent) || isIllustrationsHeading(h.textContent)) continue;
+    const id = headingId(h);
+    if (id && targets.has(id.toLowerCase())) return h;
+  }
+
+  const chapter = doc.querySelector(".chapter");
+  if (chapter) {
+    return chapter.querySelector("h1, h2, h3, h4, h5, h6") || chapter;
+  }
+
+  if (tocHeading) {
+    let el = tocHeading.nextElementSibling;
+    while (el) {
+      if (/^H[1-6]$/.test(el.tagName) && !isContentsHeading(el.textContent) && !isIllustrationsHeading(el.textContent)) {
+        return el;
+      }
+      const nested = el.querySelector?.("h1, h2, h3, h4, h5, h6");
+      if (
+        nested &&
+        !isContentsHeading(nested.textContent) &&
+        !isIllustrationsHeading(nested.textContent)
+      ) {
+        return nested;
+      }
+      el = el.nextElementSibling;
+    }
+  }
+
+  // No TOC: body starts at first id-bearing heading after the first title-ish block.
+  const headings = [...doc.querySelectorAll("h1, h2, h3, h4, h5, h6")];
+  for (let i = 1; i < headings.length; i++) {
+    if (headingId(headings[i])) return headings[i];
+  }
+  return null;
+}
+
+function isAtOrAfter(el, start) {
+  if (!start) return true;
+  if (el === start || start.contains(el)) return true;
+  const pos = start.compareDocumentPosition(el);
+  return !!(pos & Node.DOCUMENT_POSITION_FOLLOWING);
 }
 
 function entryFromLink(a, titleOverride) {
@@ -185,8 +259,8 @@ function extractTocEntries(roots) {
 }
 
 /**
- * Clean Gutenberg HTML and return { title, blocks, tocEntries }.
- * Original CONTENTS is removed and rebuilt later with booklet page numbers.
+ * Clean Gutenberg HTML → { title, frontBlocks, bodyBlocks, tocEntries }.
+ * Front matter (title/author/publisher) then CONTENTS then body on a fresh page.
  */
 export function prepareBookFromHtml(htmlString, fallbackName = "book") {
   const parser = new DOMParser();
@@ -198,8 +272,9 @@ export function prepareBookFromHtml(htmlString, fallbackName = "book") {
   doc.querySelectorAll("#pg-header, #pg-footer, script, style, link, noscript").forEach((el) => el.remove());
   doc.querySelectorAll("img, svg, picture, source, object, embed, video, audio, iframe").forEach((el) => el.remove());
 
-  const { roots, skip } = findTocRegion(doc);
+  const { roots, skip, tocHeading } = findTocRegion(doc);
   const tocEntries = extractTocEntries(roots);
+  const bodyStart = findBodyStart(doc, tocEntries, tocHeading);
 
   // Capture ids before unwrapping anchors.
   const idByElement = new WeakMap();
@@ -216,10 +291,11 @@ export function prepareBookFromHtml(htmlString, fallbackName = "book") {
     if (!normSpace(fig.textContent)) fig.remove();
   });
 
-  const blocks = [];
+  const frontBlocks = [];
+  const bodyBlocks = [];
   const root = doc.body || doc;
 
-  const inToc = (el) => {
+  const inSkip = (el) => {
     for (const s of skip) {
       if (s === el || s.contains(el)) return true;
     }
@@ -227,13 +303,19 @@ export function prepareBookFromHtml(htmlString, fallbackName = "book") {
   };
 
   const pushText = (type, el) => {
-    if (inToc(el)) return;
+    if (inSkip(el)) return;
     const text = normSpace(el.textContent);
-    if (!text || isBoilerplateLine(text)) return;
+    if (!text || isBoilerplateLine(text) || isPgEditionPicker(text)) return;
+    // Skip orphan edition-table rows / filenumber lines near the picker.
+    if (/^\d+\s*\(.*illustrations?/i.test(text)) return;
+    if (/^\[\d+\]$/.test(text)) return;
+
     const block = { type, text };
     const id = idByElement.get(el);
     if (id) block.id = id;
-    blocks.push(block);
+
+    if (bodyStart && isAtOrAfter(el, bodyStart)) bodyBlocks.push(block);
+    else frontBlocks.push(block);
   };
 
   const nodes = root.querySelectorAll("h1, h2, h3, h4, h5, h6, p, blockquote, li, pre, tr");
@@ -246,10 +328,15 @@ export function prepareBookFromHtml(htmlString, fallbackName = "book") {
     });
   } else {
     const text = normSpace(root.textContent);
-    if (text && !isBoilerplateLine(text)) blocks.push({ type: "para", text });
+    if (text && !isBoilerplateLine(text)) bodyBlocks.push({ type: "para", text });
   }
 
-  return { title, blocks, tocEntries };
+  // If split failed, keep prior behaviour: everything is body.
+  if (!bodyBlocks.length && frontBlocks.length) {
+    return { title, frontBlocks: [], bodyBlocks: frontBlocks, tocEntries };
+  }
+
+  return { title, frontBlocks, bodyBlocks, tocEntries };
 }
 
 export async function extractHtmlFromZip(arrayBuffer, onStatus) {

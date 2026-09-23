@@ -70,9 +70,20 @@ form.addEventListener("submit", async (event) => {
   try {
     const zipUrl = normalizeGutenbergSource(raw);
     const buffer = await fetchBookZip(zipUrl, setProgress);
-    const { title, blocks, tocEntries } = await extractHtmlFromZip(buffer, setProgress);
-    if (!blocks.length) throw new Error("No readable text found in that book.");
-    const { bytes, filename } = await buildBookletPdf(blocks, title, setProgress, tocEntries);
+    const { title, frontBlocks, bodyBlocks, tocEntries } = await extractHtmlFromZip(
+      buffer,
+      setProgress
+    );
+    if (!bodyBlocks.length && !frontBlocks.length) {
+      throw new Error("No readable text found in that book.");
+    }
+    const { bytes, filename } = await buildBookletPdf(
+      bodyBlocks,
+      title,
+      setProgress,
+      tocEntries,
+      frontBlocks
+    );
     setProgress(6, `Done - downloading ${filename}`);
     downloadBytes(bytes, filename);
   } catch (err) {
