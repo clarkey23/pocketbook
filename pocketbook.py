@@ -182,10 +182,33 @@ def find_html_file(dir):
     return os.path.join(dir, html_files[0])
 
 
+def clip_to_gutenberg_book(html: str) -> str:
+    """Keep only markup between *** START *** and *** END *** markers."""
+    start = re.search(
+        r"\*{3}\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*?\*{3}",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    end = re.search(
+        r"\*{3}\s*END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK.*?\*{3}",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not start or not end or end.start() <= start.end():
+        return html
+    body = html[start.end() : end.start()]
+    return (
+        "<!DOCTYPE html><html><head><meta charset='utf-8'></head>"
+        f"<body>{body}</body></html>"
+    )
+
+
 def prepare_html_for_fast_print(html_file):
-    """Strip images and Gutenberg chrome. Keep link text (black via CSS)."""
+    """Clip to Gutenberg book body; strip images. Keep link text (black via CSS)."""
     with open(html_file, "r", encoding="utf-8", errors="ignore") as f:
-        soup = BeautifulSoup(f, "html.parser")
+        raw = f.read()
+
+    soup = BeautifulSoup(clip_to_gutenberg_book(raw), "html.parser")
 
     for selector in ("#pg-header", "#pg-footer", "script", "style", "link", "noscript"):
         for tag in soup.select(selector):
@@ -193,9 +216,6 @@ def prepare_html_for_fast_print(html_file):
 
     for tag in soup.find_all(["img", "svg", "picture", "source", "object", "embed", "video", "audio", "iframe"]):
         tag.decompose()
-
-    # Keep all link text (TOC entries included). CSS forces black, no underline.
-    # Do not delete page-number / roman-numeral anchors — that wiped contents pages.
 
     # Drop empty figures left behind after image removal.
     for tag in soup.find_all("figure"):

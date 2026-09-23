@@ -5,17 +5,41 @@ function guessTitle(doc, fallback) {
   return (safe.length > 40 ? safe.slice(0, 40).replace(/_+$/, "") : safe) || "pocketbook";
 }
 
+const START_RE =
+  /\*{3}\s*START OF (?:THE|THIS) PROJECT GUTENBERG EBOOK[\s\S]*?\*{3}/i;
+const END_RE =
+  /\*{3}\s*END OF (?:THE|THIS) PROJECT GUTENBERG EBOOK[\s\S]*?\*{3}/i;
+
+/** Keep only the HTML between the Gutenberg START/END markers (text-only later). */
+export function clipToGutenbergBook(html) {
+  const start = START_RE.exec(html);
+  const end = END_RE.exec(html);
+  if (!start || !end || end.index <= start.index + start[0].length) {
+    return html;
+  }
+  const body = html.slice(start.index + start[0].length, end.index);
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>${body}</body></html>`;
+}
+
+function isBoilerplateLine(text) {
+  return /^\*{3}\s*(START|END) OF (?:THE|THIS) PROJECT GUTENBERG/i.test(text);
+}
+
 /**
  * Clean Gutenberg HTML and return { title, blocks: [{type, text}] }
+ * Text only, clipped to *** START *** … *** END ***.
  */
 export function prepareBookFromHtml(htmlString, fallbackName = "book") {
   const parser = new DOMParser();
-  const doc = parser.parseFromString(htmlString, "text/html");
+  const titleDoc = parser.parseFromString(htmlString, "text/html");
+  const title = guessTitle(titleDoc, fallbackName);
+
+  const doc = parser.parseFromString(clipToGutenbergBook(htmlString), "text/html");
 
   doc.querySelectorAll("#pg-header, #pg-footer, script, style, link, noscript").forEach((el) => el.remove());
   doc.querySelectorAll("img, svg, picture, source, object, embed, video, audio, iframe").forEach((el) => el.remove());
 
-  // Keep link text (incl. TOC entries). Do not delete anchors — that wiped contents pages.
+  // Keep link text (incl. TOC entries).
   for (const a of [...doc.querySelectorAll("a")]) {
     a.replaceWith(doc.createTextNode(a.textContent || ""));
   }
@@ -24,13 +48,12 @@ export function prepareBookFromHtml(htmlString, fallbackName = "book") {
     if (!(fig.textContent || "").trim()) fig.remove();
   });
 
-  const title = guessTitle(doc, fallbackName);
   const blocks = [];
   const root = doc.body || doc;
 
   const pushText = (type, el) => {
     const text = (el.textContent || "").replace(/\s+/g, " ").trim();
-    if (!text) return;
+    if (!text || isBoilerplateLine(text)) return;
     blocks.push({ type, text });
   };
 
@@ -46,7 +69,7 @@ export function prepareBookFromHtml(htmlString, fallbackName = "book") {
     });
   } else {
     const text = (root.textContent || "").replace(/\s+/g, " ").trim();
-    if (text) blocks.push({ type: "para", text });
+    if (text && !isBoilerplateLine(text)) blocks.push({ type: "para", text });
   }
 
   return { title, blocks };
