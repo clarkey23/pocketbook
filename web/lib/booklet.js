@@ -38,6 +38,21 @@ function reorderIndices(total) {
   return order.filter((idx) => idx < total);
 }
 
+function formatTocLine(font, title, pageStr, maxWidth) {
+  const pageW = font.widthOfTextAtSize(pageStr, FONT_SIZE);
+  const dotW = font.widthOfTextAtSize(".", FONT_SIZE) || 1;
+  const spaceW = font.widthOfTextAtSize(" ", FONT_SIZE);
+  let titlePart = String(title || "").replace(/\s+/g, " ").trim();
+  let titleW = font.widthOfTextAtSize(titlePart, FONT_SIZE);
+  const reserved = pageW + spaceW * 2 + dotW * 3;
+  while (titlePart.length > 8 && titleW + reserved > maxWidth) {
+    titlePart = `${titlePart.slice(0, -2).trim()}…`;
+    titleW = font.widthOfTextAtSize(titlePart, FONT_SIZE);
+  }
+  const dots = Math.max(3, Math.floor((maxWidth - titleW - pageW - spaceW * 2) / dotW));
+  return `${titlePart} ${".".repeat(dots)} ${pageStr}`;
+}
+
 /**
  * Place a page rotated 90° or 270° into a target cell (pdf-lib coords, origin bottom-left).
  */
@@ -50,7 +65,6 @@ function drawRotatedPage(page, embedded, cell, rotation, degrees) {
   const oy = y + (h - drawnH) / 2;
 
   if (rotation === 90) {
-    // CCW 90° around the page's bottom-left; nudge so content fills the cell.
     page.drawPage(embedded, {
       x: ox + drawnW,
       y: oy,
@@ -59,7 +73,6 @@ function drawRotatedPage(page, embedded, cell, rotation, degrees) {
       rotate: degrees(90),
     });
   } else {
-    // 270° CCW (= 90° CW)
     page.drawPage(embedded, {
       x: ox,
       y: oy + drawnH,
@@ -71,9 +84,139 @@ function drawRotatedPage(page, embedded, cell, rotation, degrees) {
 }
 
 /**
+ * Layout blocks onto mini pages. Returns id→bodyPage (1-based) for targets.
+ */
+async function layoutMiniPages(PDFDocument, fontkit, fontBytes, boldBytes, blocks) {
+  const content = await PDFDocument.create();
+  content.registerFontkit(fontkit);
+  const font = await content.embedFont(fontBytes, { subset: true });
+  const bold = await content.embedFont(boldBytes, { subset: true });
+
+  const maxWidth = MINI_W - INNER_MARGIN * 2;
+  const textBottom = INNER_MARGIN + FOOTER_H;
+  const stampPage = (p) => {
+    p.drawText(" ", { x: 1, y: 1, size: 1, font });
+  };
+
+  let page = content.addPage([MINI_W, MINI_H]);
+  let y = MINI_H - INNER_MARGIN - FONT_SIZE;
+  stampPage(page);
+
+  const idToPage = new Map();
+  const headingPages = [];
+
+  const newPage = () => {
+    page = content.addPage([MINI_W, MINI_H]);
+    stampPage(page);
+    y = MINI_H - INNER_MARGIN - FONT_SIZE;
+  };
+  const ensureSpace = (needed) => {
+    if (y - needed < textBottom) newPage();
+  };
+  const markBlock = (block) => {
+    const pageNo = content.getPageCount();
+    if (block.id && !idToPage.has(block.id)) idToPage.set(block.id, pageNo);
+    if (block.type === "heading") {
+      headingPages.push({ text: block.text, page: pageNo, id: block.id || "" });
+    }
+  };
+
+  for (const block of blocks) {
+    const size = block.type === "heading" ? HEADING_SIZE : FONT_SIZE;
+    const useFont = block.type === "heading" ? bold : font;
+    const lines = wrapLine(useFont, block.text, size, maxWidth);
+    if (!lines.length) continue;
+    if (block.type === "heading") {
+      ensureSpace(LINE_HEIGHT * 1.2);
+      y -= LINE_HEIGHT * 0.15;
+    }
+    let marked = false;
+    for (const line of lines) {
+      ensureSpace(LINE_HEIGHT);
+      if (!marked) {
+        markBlock(block);
+        marked = true;
+      }
+      const safe = line.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
+      if (!safe) continue;
+      page.drawText(safe, { x: INNER_MARGIN, y, size, font: useFont });
+      y -= LINE_HEIGHT;
+    }
+    y -= LINE_HEIGHT * 0.2;
+  }
+
+  return { content, font, bold, idToPage, headingPages, maxWidth };
+}
+
+function lookupPage(idToPage, targetId) {
+  if (!targetId) return null;
+  if (idToPage.has(targetId)) return idToPage.get(targetId);
+  const lower = targetId.toLowerCase();
+  for (const [k, v] of idToPage) {
+    if (k.toLowerCase() === lower) return v;
+  }
+  return null;
+}
+
+function resolveTocEntries(tocEntries, idToPage, headingPages) {
+  const resolved = [];
+  const seen = new Set();
+
+  if (tocEntries?.length) {
+    for (const entry of tocEntries) {
+      const bodyPage = lookupPage(idToPage, entry.targetId);
+      if (bodyPage == null) continue;
+      if (seen.has(entry.targetId)) continue;
+      seen.add(entry.targetId);
+      resolved.push({ title: entry.title, bodyPage });
+    }
+  }
+
+  // Fallback when the HTML had no usable CONTENTS links: chapter-like headings with ids.
+  if (!resolved.length) {
+    for (const h of headingPages) {
+      if (!h.id) continue;
+      if (seen.has(h.id)) continue;
+      seen.add(h.id);
+      resolved.push({ title: h.text, bodyPage: h.page });
+    }
+  }
+
+  return resolved;
+}
+
+function buildTocBlocks(font, entries, maxWidth) {
+  const blocks = [{ type: "heading", text: "CONTENTS" }];
+  for (const entry of entries) {
+    blocks.push({
+      type: "para",
+      text: formatTocLine(font, entry.title, String(entry.page), maxWidth),
+    });
+  }
+  return blocks;
+}
+
+async function mergeDocs(PDFDocument, fontkit, docs) {
+  const out = await PDFDocument.create();
+  out.registerFontkit(fontkit);
+  for (const doc of docs) {
+    const n = doc.getPageCount();
+    if (!n) continue;
+    const indices = Array.from({ length: n }, (_, i) => i);
+    const pages = await out.copyPages(doc, indices);
+    pages.forEach((p) => out.addPage(p));
+  }
+  return out;
+}
+
+/**
+ * @param {Array} blocks
+ * @param {string} title
+ * @param {Function} [onStatus]
+ * @param {Array<{title:string,targetId:string}>} [tocEntries]
  * @returns {Promise<{ bytes: Uint8Array, filename: string }>}
  */
-export async function buildBookletPdf(blocks, title, onStatus) {
+export async function buildBookletPdf(blocks, title, onStatus, tocEntries = []) {
   onStatus?.(4, "Creating PDF…");
 
   const pdfLib = await import("https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm");
@@ -86,57 +229,49 @@ export async function buildBookletPdf(blocks, title, onStatus) {
     fetch(new URL("../fonts/WorkSans-Bold.ttf", import.meta.url)).then((r) => r.arrayBuffer()),
   ]);
 
-  const content = await PDFDocument.create();
-  content.registerFontkit(fontkit);
-  const font = await content.embedFont(regularBytes, { subset: true });
-  const bold = await content.embedFont(boldBytes, { subset: true });
+  // Pass 1: layout body and learn where each anchor lands.
+  const body = await layoutMiniPages(PDFDocument, fontkit, regularBytes, boldBytes, blocks);
+  const resolved = resolveTocEntries(tocEntries, body.idToPage, body.headingPages);
 
-  const maxWidth = MINI_W - INNER_MARGIN * 2;
-  const textBottom = INNER_MARGIN + FOOTER_H;
-  // Every page needs a content stream or pdf-lib cannot embed it.
+  const parts = [];
+  if (resolved.length) {
+    // Measure TOC length, then rebuild with body pages offset by that count.
+    // Repeat if wrapping changes when page numbers get wider (9 → 10, etc.).
+    let tocCount = 0;
+    let tocDoc = null;
+    for (let pass = 0; pass < 3; pass++) {
+      const entries = resolved.map((e) => ({
+        title: e.title,
+        page: e.bodyPage + tocCount,
+      }));
+      const toc = await layoutMiniPages(
+        PDFDocument,
+        fontkit,
+        regularBytes,
+        boldBytes,
+        buildTocBlocks(body.font, entries, body.maxWidth)
+      );
+      const nextCount = toc.content.getPageCount();
+      tocDoc = toc.content;
+      if (nextCount === tocCount) break;
+      tocCount = nextCount;
+    }
+    parts.push(tocDoc);
+  }
+  parts.push(body.content);
+
+  const content = await mergeDocs(PDFDocument, fontkit, parts);
+  const font = await content.embedFont(regularBytes, { subset: true });
   const stampPage = (p) => {
     p.drawText(" ", { x: 1, y: 1, size: 1, font });
   };
-  let page = content.addPage([MINI_W, MINI_H]);
-  let y = MINI_H - INNER_MARGIN - FONT_SIZE;
-  stampPage(page);
-
-  const newPage = () => {
-    page = content.addPage([MINI_W, MINI_H]);
-    stampPage(page);
-    y = MINI_H - INNER_MARGIN - FONT_SIZE;
-  };
-  const ensureSpace = (needed) => {
-    if (y - needed < textBottom) newPage();
-  };
-
-  for (const block of blocks) {
-    const size = block.type === "heading" ? HEADING_SIZE : FONT_SIZE;
-    const useFont = block.type === "heading" ? bold : font;
-    const lines = wrapLine(useFont, block.text, size, maxWidth);
-    if (!lines.length) continue;
-    if (block.type === "heading") {
-      ensureSpace(LINE_HEIGHT * 1.2);
-      y -= LINE_HEIGHT * 0.15;
-    }
-    for (const line of lines) {
-      ensureSpace(LINE_HEIGHT);
-      // pdf-lib rejects some control chars
-      const safe = line.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, "");
-      if (!safe) continue;
-      page.drawText(safe, { x: INNER_MARGIN, y, size, font: useFont });
-      y -= LINE_HEIGHT;
-    }
-    y -= LINE_HEIGHT * 0.2;
-  }
 
   while (content.getPageCount() % 8 !== 0) {
     const blank = content.addPage([MINI_W, MINI_H]);
     stampPage(blank);
   }
 
-  // Page numbers sit bottom-center inside each mini page (original pocketbook style).
-  // Sheet margin stays blank so printers can clip the edge safely.
+  // Page numbers sit bottom-center inside each mini page.
   const pages = content.getPages();
   for (let i = 0; i < pages.length; i++) {
     const label = String(i + 1);
