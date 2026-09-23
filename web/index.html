@@ -28,7 +28,10 @@
     </p>
     <p>Example: https://www.gutenberg.org/ebooks/36</p>
     <p id="error" hidden></p>
-    <p><button id="submit" type="submit">Make booklet</button></p>
+    <p>
+      <button id="submit" type="submit">Make booklet</button>
+      <button id="cancel" type="button" hidden>Cancel</button>
+    </p>
   </form>
 
   <h2>Progress</h2>
@@ -40,6 +43,7 @@
     <li data-step="5"><span class="mark">○</span> Impose booklet</li>
     <li data-step="6"><span class="mark">○</span> Save PDF</li>
   </ol>
+  <p id="estimate" hidden></p>
   <p id="detail">Waiting for a link…</p>
 
   <script type="module" src="app.js"></script>

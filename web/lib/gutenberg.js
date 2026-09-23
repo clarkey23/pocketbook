@@ -38,17 +38,19 @@ export function getProxyBase() {
   if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
     return "http://127.0.0.1:8787";
   }
-  return "https://pocketbook-gutenberg-proxy.workers.dev";
+  // Same-origin proxy (Coolify / Docker server.mjs)
+  return `${location.origin}/proxy`;
 }
 
-export async function fetchBookZip(zipUrl, onStatus) {
+export async function fetchBookZip(zipUrl, onStatus, signal) {
   const proxy = getProxyBase();
   const endpoint = `${proxy}/?url=${encodeURIComponent(zipUrl)}`;
   onStatus?.(1, "Downloading from Project Gutenberg…");
   let response;
   try {
-    response = await fetch(endpoint);
-  } catch {
+    response = await fetch(endpoint, { signal });
+  } catch (err) {
+    if (err?.name === "AbortError") throw err;
     throw new Error(
       "Could not reach the download proxy. Run the Gutenberg proxy (see README) or set localStorage.pocketbook_proxy."
     );

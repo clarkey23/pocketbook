@@ -1,0 +1,9 @@
+{
+  "name": "pocketbook-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "proxy": "node workers/gutenberg-proxy/local-proxy.mjs"
+  }
+}

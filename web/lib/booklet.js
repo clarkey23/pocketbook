@@ -83,10 +83,19 @@ function drawRotatedPage(page, embedded, cell, rotation, degrees) {
   }
 }
 
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    const err = new Error("Cancelled.");
+    err.name = "AbortError";
+    throw err;
+  }
+}
+
 /**
  * Layout blocks onto mini pages. Returns id→bodyPage (1-based) for targets.
  */
-async function layoutMiniPages(PDFDocument, fontkit, fontBytes, boldBytes, blocks) {
+async function layoutMiniPages(PDFDocument, fontkit, fontBytes, boldBytes, blocks, signal) {
+  throwIfAborted(signal);
   const content = await PDFDocument.create();
   content.registerFontkit(fontkit);
   const font = await content.embedFont(fontBytes, { subset: true });
@@ -121,7 +130,9 @@ async function layoutMiniPages(PDFDocument, fontkit, fontBytes, boldBytes, block
     }
   };
 
+  let i = 0;
   for (const block of blocks) {
+    if ((i++ & 31) === 0) throwIfAborted(signal);
     const size = block.type === "heading" ? HEADING_SIZE : FONT_SIZE;
     const useFont = block.type === "heading" ? bold : font;
     const lines = wrapLine(useFont, block.text, size, maxWidth);
@@ -215,6 +226,7 @@ async function mergeDocs(PDFDocument, fontkit, docs) {
  * @param {Function} [onStatus]
  * @param {Array<{title:string,targetId:string}>} [tocEntries]
  * @param {Array} [frontBlocks] title/author/publisher matter before CONTENTS
+ * @param {AbortSignal} [signal]
  * @returns {Promise<{ bytes: Uint8Array, filename: string }>}
  */
 export async function buildBookletPdf(
@@ -222,9 +234,11 @@ export async function buildBookletPdf(
   title,
   onStatus,
   tocEntries = [],
-  frontBlocks = []
+  frontBlocks = [],
+  signal
 ) {
   onStatus?.(4, "Creating PDF…");
+  throwIfAborted(signal);
 
   const pdfLib = await import("https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/+esm");
   const fontkitMod = await import("https://cdn.jsdelivr.net/npm/@pdf-lib/fontkit@1.1.1/+esm");
@@ -232,12 +246,24 @@ export async function buildBookletPdf(
   const fontkit = fontkitMod.default || fontkitMod;
 
   const [regularBytes, boldBytes] = await Promise.all([
-    fetch(new URL("../fonts/WorkSans-Regular.ttf", import.meta.url)).then((r) => r.arrayBuffer()),
-    fetch(new URL("../fonts/WorkSans-Bold.ttf", import.meta.url)).then((r) => r.arrayBuffer()),
+    fetch(new URL("../fonts/WorkSans-Regular.ttf", import.meta.url), { signal }).then((r) =>
+      r.arrayBuffer()
+    ),
+    fetch(new URL("../fonts/WorkSans-Bold.ttf", import.meta.url), { signal }).then((r) =>
+      r.arrayBuffer()
+    ),
   ]);
 
   // Pass 1: layout body alone (starts on its own page later) and map anchors.
-  const body = await layoutMiniPages(PDFDocument, fontkit, regularBytes, boldBytes, bodyBlocks);
+  const body = await layoutMiniPages(
+    PDFDocument,
+    fontkit,
+    regularBytes,
+    boldBytes,
+    bodyBlocks,
+    signal
+  );
+  throwIfAborted(signal);
   const resolved = resolveTocEntries(tocEntries, body.idToPage, body.headingPages);
 
   // Pass 2: title/front matter + CONTENTS in one flow; page nums include that preamble.
@@ -247,6 +273,7 @@ export async function buildBookletPdf(
 
   if (hasPreamble) {
     for (let pass = 0; pass < 4; pass++) {
+      throwIfAborted(signal);
       const tocBlocks = resolved.length
         ? buildTocBlocks(
             body.font,
@@ -262,7 +289,8 @@ export async function buildBookletPdf(
         fontkit,
         regularBytes,
         boldBytes,
-        [...frontBlocks, ...tocBlocks]
+        [...frontBlocks, ...tocBlocks],
+        signal
       );
       const next = preamble.content.getPageCount();
       preambleDoc = preamble.content;
@@ -271,6 +299,7 @@ export async function buildBookletPdf(
     }
   }
 
+  throwIfAborted(signal);
   const parts = [];
   if (preambleDoc) parts.push(preambleDoc);
   parts.push(body.content);
@@ -286,9 +315,12 @@ export async function buildBookletPdf(
     stampPage(blank);
   }
 
+  throwIfAborted(signal);
+
   // Page numbers sit bottom-center inside each mini page.
   const pages = content.getPages();
   for (let i = 0; i < pages.length; i++) {
+    if ((i & 63) === 0) throwIfAborted(signal);
     const label = String(i + 1);
     const tw = font.widthOfTextAtSize(label, PAGE_NUM_SIZE);
     pages[i].drawText(label, {
@@ -301,6 +333,7 @@ export async function buildBookletPdf(
   }
 
   onStatus?.(5, "Imposing pages into pocket booklet…");
+  throwIfAborted(signal);
 
   const total = content.getPageCount();
   const order = reorderIndices(total);
@@ -313,6 +346,7 @@ export async function buildBookletPdf(
   const nsheets = Math.ceil(order.length / 8);
 
   for (let sheet = 0; sheet < nsheets; sheet++) {
+    throwIfAborted(signal);
     const sheetPage = out.addPage([A4_W, A4_H]);
     const slice = order.slice(sheet * 8, sheet * 8 + 8);
     const copied = await out.copyPages(content, slice);
@@ -345,6 +379,7 @@ export async function buildBookletPdf(
   }
 
   onStatus?.(6, "Saving PDF…");
+  throwIfAborted(signal);
   const bytes = await out.save();
   return {
     bytes,

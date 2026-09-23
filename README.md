@@ -24,7 +24,7 @@ Upstream credit: [@sieste](https://github.com/sieste).
 
 ## Web app (paste URL in the browser)
 
-The PDF is built **on the user’s device**. A tiny free Cloudflare Worker only proxies the Gutenberg zip (browsers can’t download it directly because of CORS).
+The PDF is built **on the user’s device**. A tiny proxy only fetches the Gutenberg zip (browsers can’t download it directly because of CORS).
 
 ### Run locally
 
@@ -38,9 +38,38 @@ cd web && python3 -m http.server 8080
 
 Open http://127.0.0.1:8080
 
-### Deploy
+Or one process (same as production):
 
-1. **Proxy** (Cloudflare account, free):
+```bash
+node server.mjs
+# → http://127.0.0.1:3000
+```
+
+### Deploy with Coolify (GitHub)
+
+One Docker service: static site + `/proxy` for Gutenberg.
+
+1. Push `main` to GitHub (already on `clarkey23/pocketbook`).
+2. In Coolify → **New Resource** → **Public/Private Repository**.
+3. Pick this repo, branch `main`.
+4. Build pack: **Dockerfile** (repo root `Dockerfile`).
+5. Port: **3000**.
+6. Add your domain / Let’s Encrypt as usual.
+7. Deploy.
+
+Health check path (optional): `/health`
+
+After deploy, open the domain — no Cloudflare Worker needed. The app calls `/proxy` on the same origin.
+
+**Local override** (only if you ever need a different proxy):
+
+```js
+localStorage.setItem("pocketbook_proxy", "https://YOUR-PROXY")
+```
+
+### Deploy (Cloudflare Worker + static host)
+
+Alternative if you prefer Pages + Workers instead of Coolify:
 
 ```bash
 cd workers/gutenberg-proxy
@@ -48,17 +77,7 @@ npx wrangler login
 npx wrangler deploy
 ```
 
-Copy the `*.workers.dev` URL.
-
-2. **Site** — host the `web/` folder (GitHub Pages, Cloudflare Pages, Netlify, etc.).
-
-3. If the worker URL isn’t `https://pocketbook-gutenberg-proxy.workers.dev`, set it once in the browser console on your site:
-
-```js
-localStorage.setItem("pocketbook_proxy", "https://YOUR_SUBDOMAIN.workers.dev")
-```
-
-Or edit `getProxyBase()` in `web/lib/gutenberg.js`.
+Host `web/` on Pages/Netlify/etc., then either use same-origin only via Coolify/`server.mjs`, or set `localStorage.pocketbook_proxy` to the `*.workers.dev` URL.
 
 ---
 
