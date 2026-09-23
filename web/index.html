@@ -4,53 +4,43 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>PocketBook</title>
-  <meta name="description" content="Paste a Project Gutenberg URL and get a pocket-sized print-ready booklet PDF." />
-  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main class="stage">
-    <section class="panel">
-      <p class="brand">PocketBook</p>
-      <h1>Drop in a Project Gutenberg URL and get a pocket-size print of the book.</h1>
-      <p class="lede">Runs on your device. Print single-sided A4, cut the centre slit, fold.</p>
+  <h1>PocketBook</h1>
+  <p>Drop in a Project Gutenberg URL and get a pocket-size print of the book.</p>
+  <p>Runs on your device. Print single-sided A4, cut the centre slit, fold.</p>
 
-      <form id="form" class="form" novalidate>
-        <label for="url">Project Gutenberg URL</label>
-        <input
-          id="url"
-          name="url"
-          type="url"
-          required
-          autocomplete="off"
-          spellcheck="false"
-          placeholder="https://www.gutenberg.org/ebooks/36"
-        />
-        <p class="hint">Example: <code>https://www.gutenberg.org/ebooks/36</code></p>
-        <p id="error" class="error" hidden></p>
-        <button id="submit" type="submit">
-          <span class="btn-idle">Make booklet</span>
-          <span class="btn-busy" hidden>Working…</span>
-        </button>
-      </form>
+  <img src="assets/pocketbook.jpg" alt="PocketBook fold diagram" width="600" />
 
-      <div class="progress" aria-live="polite">
-        <h2>Progress</h2>
-        <ol class="steps" id="steps">
-          <li data-step="1"><span class="mark">○</span><span class="label">Download</span></li>
-          <li data-step="2"><span class="mark">○</span><span class="label">Extract</span></li>
-          <li data-step="3"><span class="mark">○</span><span class="label">Prepare text</span></li>
-          <li data-step="4"><span class="mark">○</span><span class="label">Create PDF</span></li>
-          <li data-step="5"><span class="mark">○</span><span class="label">Impose booklet</span></li>
-          <li data-step="6"><span class="mark">○</span><span class="label">Save PDF</span></li>
-        </ol>
-        <p id="detail" class="detail">Waiting for a link…</p>
-      </div>
-    </section>
+  <form id="form">
+    <p>
+      <label for="url">Project Gutenberg URL</label><br />
+      <input
+        id="url"
+        name="url"
+        type="url"
+        required
+        size="60"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="https://www.gutenberg.org/ebooks/36"
+      />
+    </p>
+    <p>Example: https://www.gutenberg.org/ebooks/36</p>
+    <p id="error" hidden></p>
+    <p><button id="submit" type="submit">Make booklet</button></p>
+  </form>
 
-    <aside class="visual" aria-hidden="true">
-      <img src="assets/pocketbook.jpg" alt="" width="1200" height="900" />
-    </aside>
-  </main>
+  <h2>Progress</h2>
+  <ol id="steps">
+    <li data-step="1"><span class="mark">○</span> Download</li>
+    <li data-step="2"><span class="mark">○</span> Extract</li>
+    <li data-step="3"><span class="mark">○</span> Prepare text</li>
+    <li data-step="4"><span class="mark">○</span> Create PDF</li>
+    <li data-step="5"><span class="mark">○</span> Impose booklet</li>
+    <li data-step="6"><span class="mark">○</span> Save PDF</li>
+  </ol>
+  <p id="detail">Waiting for a link…</p>
 
   <script type="module" src="app.js"></script>
 </body>

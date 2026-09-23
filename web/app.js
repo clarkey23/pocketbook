@@ -8,13 +8,10 @@ const button = document.getElementById("submit");
 const errorEl = document.getElementById("error");
 const detailEl = document.getElementById("detail");
 const steps = [...document.querySelectorAll("#steps li")];
-const idleLabel = button.querySelector(".btn-idle");
-const busyLabel = button.querySelector(".btn-busy");
 
 function setBusy(on) {
   button.disabled = on;
-  idleLabel.hidden = on;
-  busyLabel.hidden = !on;
+  button.textContent = on ? "Working…" : "Make booklet";
 }
 
 function showError(message) {
@@ -24,37 +21,25 @@ function showError(message) {
 
 function resetSteps() {
   steps.forEach((li) => {
-    li.classList.remove("is-active", "is-done");
     li.querySelector(".mark").textContent = "○";
   });
   detailEl.textContent = "Starting…";
-  detailEl.classList.add("is-live");
 }
 
 function setProgress(stage, message) {
   steps.forEach((li) => {
     const n = Number(li.dataset.step);
-    li.classList.remove("is-active", "is-done");
     const mark = li.querySelector(".mark");
-    if (n < stage) {
-      li.classList.add("is-done");
-      mark.textContent = "✓";
-    } else if (n === stage) {
-      li.classList.add("is-active");
-      mark.textContent = "●";
-    } else {
-      mark.textContent = "○";
-    }
+    if (n < stage || stage >= 6) mark.textContent = "✓";
+    else if (n === stage) mark.textContent = "●";
+    else mark.textContent = "○";
   });
   if (stage >= 6) {
     steps.forEach((li) => {
-      li.classList.add("is-done");
-      li.classList.remove("is-active");
       li.querySelector(".mark").textContent = "✓";
     });
   }
   detailEl.textContent = message;
-  detailEl.classList.add("is-live");
 }
 
 function downloadBytes(bytes, filename) {
@@ -94,10 +79,7 @@ form.addEventListener("submit", async (event) => {
     console.error(err);
     showError(err?.message || "Something went wrong.");
     detailEl.textContent = "Failed.";
-    detailEl.classList.remove("is-live");
   } finally {
     setBusy(false);
   }
 });
-
-detailEl.textContent = "Waiting for a link…";
