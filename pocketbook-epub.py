@@ -90,17 +90,12 @@ def nup_2x4(input_pdf, output_pdf, title=""):
     cols, rows = 2, 4
     cell_w, cell_h = pw / cols, ph / rows
     marksize = 5
-    npages = len(src)
-    nsheets = math.ceil(npages // 8)
-    trunc_width = 30
-    trunc_title = f"{title[:trunc_width-3] + '...' if len(title) > trunc_width else title:<{trunc_width}}"
     for i in range(0, len(src), 8):
       page = out.new_page(width=pw, height=ph)
       for j in range(8):
         idx = i + j
         if idx >= len(src):
             break
-        src_page = src[idx]
         x = (j % 2) * cell_w
         y = (j // 2) * cell_h
         rect = fitz.Rect(x, y, x + cell_w, y + cell_h)
@@ -112,13 +107,6 @@ def nup_2x4(input_pdf, output_pdf, title=""):
           clip=None
         )
         page.draw_rect(rect, color=(0, 0, 0), width=0.5)
-        if j == 0:
-          page.insert_text((pw-3, 20), f"{int(i/8) + 1}/{nsheets}", 
-                           rotate=90, fontsize=5, 
-                           color=(.4,.4,.4), fontname='helv')
-          page.insert_text((pw-3, cell_h-3), f"{trunc_title}", 
-                           rotate=90, fontsize=5, 
-                           color=(.4,.4,.4), fontname='helv')
     out.save(output_pdf)
     out.close()
     src.close()

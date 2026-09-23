@@ -3,11 +3,13 @@ const MINI_W = 75 * MM;
 const MINI_H = 105 * MM;
 const A4_W = 595.28;
 const A4_H = 841.89;
-const SHEET_MARGIN = 5 * MM;
+const SHEET_MARGIN = 5 * MM; // blank edge — printers clip here; no text
 const FONT_SIZE = 6;
 const HEADING_SIZE = 6.5;
 const LINE_HEIGHT = 7.2;
 const INNER_MARGIN = 2.5 * MM;
+const PAGE_NUM_SIZE = 5;
+const FOOTER_H = 7; // reserve for bottom-center page number (inside mini page)
 
 function wrapLine(font, text, size, maxWidth) {
   const words = String(text || "")
@@ -90,6 +92,7 @@ export async function buildBookletPdf(blocks, title, onStatus) {
   const bold = await content.embedFont(boldBytes, { subset: true });
 
   const maxWidth = MINI_W - INNER_MARGIN * 2;
+  const textBottom = INNER_MARGIN + FOOTER_H;
   // Every page needs a content stream or pdf-lib cannot embed it.
   const stampPage = (p) => {
     p.drawText(" ", { x: 1, y: 1, size: 1, font });
@@ -104,7 +107,7 @@ export async function buildBookletPdf(blocks, title, onStatus) {
     y = MINI_H - INNER_MARGIN - FONT_SIZE;
   };
   const ensureSpace = (needed) => {
-    if (y - needed < INNER_MARGIN) newPage();
+    if (y - needed < textBottom) newPage();
   };
 
   for (const block of blocks) {
@@ -132,20 +135,32 @@ export async function buildBookletPdf(blocks, title, onStatus) {
     stampPage(blank);
   }
 
+  // Page numbers sit bottom-center inside each mini page (original pocketbook style).
+  // Sheet margin stays blank so printers can clip the edge safely.
+  const pages = content.getPages();
+  for (let i = 0; i < pages.length; i++) {
+    const label = String(i + 1);
+    const tw = font.widthOfTextAtSize(label, PAGE_NUM_SIZE);
+    pages[i].drawText(label, {
+      x: (MINI_W - tw) / 2,
+      y: (FOOTER_H - PAGE_NUM_SIZE) / 2 + 1,
+      size: PAGE_NUM_SIZE,
+      font,
+      color: rgb(0.25, 0.25, 0.25),
+    });
+  }
+
   onStatus?.(5, "Imposing pages into pocket booklet…");
 
   const total = content.getPageCount();
   const order = reorderIndices(total);
   const out = await PDFDocument.create();
-  out.registerFontkit(fontkit);
-  const labelFont = await out.embedFont(regularBytes, { subset: true });
 
   const usableW = A4_W - 2 * SHEET_MARGIN;
   const usableH = A4_H - 2 * SHEET_MARGIN;
   const cellW = usableW / 2;
   const cellH = usableH / 4;
   const nsheets = Math.ceil(order.length / 8);
-  const trunc = String(title || "pocketbook").slice(0, 28);
 
   for (let sheet = 0; sheet < nsheets; sheet++) {
     const sheetPage = out.addPage([A4_W, A4_H]);
@@ -177,23 +192,6 @@ export async function buildBookletPdf(blocks, title, onStatus) {
         borderWidth: 0.4,
       });
     }
-
-    sheetPage.drawText(`${sheet + 1}/${nsheets}`, {
-      x: A4_W - SHEET_MARGIN * 0.55,
-      y: A4_H - SHEET_MARGIN - 12,
-      size: 5,
-      font: labelFont,
-      color: rgb(0.4, 0.4, 0.4),
-      rotate: degrees(90),
-    });
-    sheetPage.drawText(trunc, {
-      x: A4_W - SHEET_MARGIN * 0.55,
-      y: A4_H - SHEET_MARGIN - cellH + 6,
-      size: 5,
-      font: labelFont,
-      color: rgb(0.4, 0.4, 0.4),
-      rotate: degrees(90),
-    });
   }
 
   onStatus?.(6, "Saving PDF…");

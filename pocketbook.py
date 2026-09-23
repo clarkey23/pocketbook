@@ -43,7 +43,6 @@ from weasyprint import HTML, CSS
 from PyPDF2 import PdfReader, PdfWriter
 import fitz  # PyMuPDF
 import shutil
-import math
 from bs4 import BeautifulSoup
 import re
 from urllib.parse import urlparse
@@ -306,10 +305,8 @@ def nup_2x4(input_pdf, output_pdf, title=""):
     usable_w = pw - 2 * margin
     usable_h = ph - 2 * margin
     cell_w, cell_h = usable_w / cols, usable_h / rows
-    npages = len(src)
-    nsheets = math.ceil(npages / 8) if npages else 0
-    trunc_width = 30
-    trunc_title = f"{title[:trunc_width-3] + '...' if len(title) > trunc_width else title:<{trunc_width}}"
+    # Sheet margin stays blank (printers clip edges). Page numbers live
+    # bottom-center on each mini page via css/pocketbook.css @bottom-center.
     for i in range(0, len(src), 8):
         page = out.new_page(width=pw, height=ph)
         for j in range(8):
@@ -327,18 +324,6 @@ def nup_2x4(input_pdf, output_pdf, title=""):
                 clip=None,
             )
             page.draw_rect(rect, color=(0, 0, 0), width=0.5)
-            if j == 0:
-                label_x = pw - margin / 2
-                page.insert_text(
-                    (label_x, margin + 16), f"{int(i / 8) + 1}/{nsheets}",
-                    rotate=90, fontsize=5,
-                    color=(0.4, 0.4, 0.4), fontname="helv",
-                )
-                page.insert_text(
-                    (label_x, margin + cell_h - 3), f"{trunc_title}",
-                    rotate=90, fontsize=5,
-                    color=(0.4, 0.4, 0.4), fontname="helv",
-                )
     # Save to a temp file first so Downloads overwrite permission issues don't crash MuPDF.
     fd, tmp_out = tempfile.mkstemp(suffix=".pdf")
     os.close(fd)
