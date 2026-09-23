@@ -1,0 +1,8 @@
+# Gutenberg CORS proxy for PocketBook web
+name = "pocketbook-gutenberg-proxy"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+
+[vars]
+# Optional: restrict which site can call this worker
+# ALLOWED_ORIGIN = "https://clarkey23.github.io"

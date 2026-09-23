@@ -1,0 +1,89 @@
+function isPageReference(text) {
+  const t = (text || "").trim();
+  if (!t) return true;
+  const compact = t.replace(/[\s\[\]\(\)\.,;:_pPgeéaá]+/g, "");
+  if (!compact) return true;
+  if (/^\d+([-\u2013\u2014]\d+)?$/.test(compact)) return true;
+  if (/^[ivxlcdmIVXLCDM]+$/.test(compact)) return true;
+  return false;
+}
+
+function stripTrailingPageNumber(text) {
+  return (text || "")
+    .trim()
+    .replace(/[\s.\u00b7\u2022\-_]*\d+\s*$/, "")
+    .trim();
+}
+
+function guessTitle(doc, fallback) {
+  const meta = doc.querySelector('meta[name="dc.title"]');
+  const raw = (meta?.getAttribute("content") || doc.title || fallback || "pocketbook").trim();
+  const safe = raw.replace(/[^0-9a-zA-Z]+/g, "_").replace(/^_+|_+$/g, "");
+  return (safe.length > 40 ? safe.slice(0, 40).replace(/_+$/, "") : safe) || "pocketbook";
+}
+
+/**
+ * Clean Gutenberg HTML and return { title, blocks: [{type, text}] }
+ */
+export function prepareBookFromHtml(htmlString, fallbackName = "book") {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(htmlString, "text/html");
+
+  doc.querySelectorAll("#pg-header, #pg-footer, script, style, link, noscript").forEach((el) => el.remove());
+  doc.querySelectorAll("img, svg, picture, source, object, embed, video, audio, iframe").forEach((el) => el.remove());
+
+  for (const a of [...doc.querySelectorAll("a")]) {
+    const text = (a.textContent || "").replace(/\s+/g, " ").trim();
+    if (isPageReference(text)) {
+      a.remove();
+      continue;
+    }
+    const cleaned = stripTrailingPageNumber(text);
+    if (!cleaned || isPageReference(cleaned)) {
+      a.remove();
+      continue;
+    }
+    a.replaceWith(doc.createTextNode(cleaned));
+  }
+
+  doc.querySelectorAll("figure").forEach((fig) => {
+    if (!(fig.textContent || "").trim()) fig.remove();
+  });
+
+  const title = guessTitle(doc, fallbackName);
+  const blocks = [];
+  const root = doc.body || doc;
+
+  const pushText = (type, el) => {
+    const text = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if (!text) return;
+    blocks.push({ type, text });
+  };
+
+  // Prefer semantic blocks; fall back to paragraphs / headings.
+  const nodes = root.querySelectorAll("h1, h2, h3, h4, h5, h6, p, blockquote, li, pre");
+  if (nodes.length) {
+    nodes.forEach((el) => {
+      const tag = el.tagName.toLowerCase();
+      if (/^h[1-6]$/.test(tag)) pushText("heading", el);
+      else pushText("para", el);
+    });
+  } else {
+    const text = (root.textContent || "").replace(/\s+/g, " ").trim();
+    if (text) blocks.push({ type: "para", text });
+  }
+
+  return { title, blocks };
+}
+
+export async function extractHtmlFromZip(arrayBuffer, onStatus) {
+  onStatus?.(2, "Extracting book…");
+  const { default: JSZip } = await import("https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm");
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const htmlName = Object.keys(zip.files).find((name) => /\.html?$/i.test(name) && !zip.files[name].dir);
+  if (!htmlName) throw new Error("No HTML file found in that Gutenberg download.");
+  const html = await zip.files[htmlName].async("string");
+  onStatus?.(3, "Preparing text…");
+  const base = htmlName.split("/").pop().replace(/\.html?$/i, "");
+  return prepareBookFromHtml(html, base);
+}

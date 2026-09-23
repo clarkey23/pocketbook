@@ -1,0 +1,311 @@
+@font-face {
+  font-family: "Work Sans";
+  src: url("fonts/WorkSans-Regular.woff2") format("woff2"),
+       url("fonts/WorkSans-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Work Sans";
+  src: url("fonts/WorkSans-Bold.woff2") format("woff2"),
+       url("fonts/WorkSans-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --ink: #15261c;
+  --ink-soft: #2a4033;
+  --paper: #e8e6e1;
+  --paper-deep: #d9d6cf;
+  --moss: #2f5440;
+  --moss-deep: #243f32;
+  --line: rgba(21, 38, 28, 0.16);
+  --muted: rgba(21, 38, 28, 0.62);
+  --error: #a84832;
+  --radius: 10px;
+  --font: "Work Sans", system-ui, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  font-family: var(--font);
+  color: var(--ink);
+  background:
+    radial-gradient(1000px 600px at 8% -10%, #f4f2ec 0%, transparent 55%),
+    radial-gradient(800px 500px at 100% 110%, #cfd8d0 0%, transparent 50%),
+    linear-gradient(160deg, var(--paper), var(--paper-deep));
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 100dvh;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 2rem 1.35rem 2.5rem;
+  animation: rise 0.65s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.brand {
+  margin: 0 0 0.85rem;
+  font-size: clamp(2.4rem, 8vw, 3.5rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+h1 {
+  margin: 0;
+  max-width: 16ch;
+  font-size: clamp(1.35rem, 3.4vw, 1.85rem);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: var(--ink-soft);
+}
+
+.lede {
+  margin: 0.9rem 0 0;
+  max-width: 36ch;
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.form {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 1.6rem;
+  max-width: 34rem;
+}
+
+.form label {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.form input {
+  width: 100%;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--ink);
+  font: inherit;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form input::placeholder {
+  color: rgba(21, 38, 28, 0.4);
+}
+
+.form input:focus {
+  border-color: var(--moss);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(47, 84, 64, 0.18);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.hint code {
+  font-size: 0.8em;
+  word-break: break-all;
+}
+
+.error {
+  margin: 0.2rem 0 0;
+  padding: 0.7rem 0.85rem;
+  border-radius: var(--radius);
+  background: rgba(168, 72, 50, 0.1);
+  color: var(--error);
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+button[type="submit"] {
+  margin-top: 0.55rem;
+  justify-self: start;
+  appearance: none;
+  border: 0;
+  border-radius: var(--radius);
+  padding: 0.9rem 1.3rem;
+  background: var(--moss);
+  color: #f4f7f4;
+  font: inherit;
+  font-weight: 700;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.12s ease;
+}
+
+button[type="submit"]:hover {
+  background: var(--moss-deep);
+}
+
+button[type="submit"]:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+button[type="submit"]:disabled {
+  cursor: wait;
+  opacity: 0.78;
+}
+
+.progress {
+  margin-top: 1.5rem;
+  max-width: 34rem;
+}
+
+.progress h2 {
+  margin: 0 0 0.7rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.steps li {
+  display: flex;
+  gap: 0.55rem;
+  align-items: baseline;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
+.steps li .mark {
+  width: 1.1rem;
+  flex: 0 0 auto;
+  font-weight: 700;
+}
+
+.steps li.is-done {
+  color: var(--ink);
+}
+
+.steps li.is-done .mark {
+  color: var(--moss);
+}
+
+.steps li.is-active {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.steps li.is-active .mark {
+  color: var(--moss);
+}
+
+.detail {
+  margin: 0.9rem 0 0;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  color: var(--muted);
+  min-height: 1.4em;
+}
+
+.detail.is-live {
+  color: var(--ink);
+}
+
+.visual {
+  position: relative;
+  min-height: 42vh;
+  overflow: hidden;
+  background: var(--ink);
+  animation: fade 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+}
+
+.visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+@media (min-width: 900px) {
+  .stage {
+    grid-template-columns: minmax(22rem, 0.95fr) 1.15fr;
+  }
+
+  .panel {
+    padding: 2.5rem 2.5rem 2.5rem 3rem;
+  }
+
+  .visual {
+    min-height: 100dvh;
+  }
+
+  .visual::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(21, 38, 28, 0.16), transparent 35%);
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel,
+  .visual {
+    animation: none;
+  }
+
+  button[type="submit"] {
+    transition: none;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

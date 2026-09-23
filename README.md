@@ -1,8 +1,6 @@
 # PocketBook
 
-Mac app that turns [Project Gutenberg](https://www.gutenberg.org/) books into pocket-sized, foldable A4 booklets.
-
-Paste a Gutenberg link → get a PDF in Downloads → print single-sided → fold.
+Paste a [Project Gutenberg](https://www.gutenberg.org/) URL → get a pocket-sized, foldable A4 booklet PDF.
 
 <img src="site/pocketbook.jpg" width=50%>
 
@@ -10,31 +8,65 @@ Paste a Gutenberg link → get a PDF in Downloads → print single-sided → fol
 
 ## About this fork
 
-This is a **maintained fork** of [sieste/pocketbook](https://github.com/sieste/pocketbook).
+Maintained fork of [sieste/pocketbook](https://github.com/sieste/pocketbook).
 
-The original project is a Python CLI. This fork adds:
+This fork adds:
 
-- A standalone **Mac app** (no Terminal, no Homebrew for end users)
-- In-window progress checklist
-- Gutenberg ebook page URLs (not only zip links)
-- Faster text-only conversion (images skipped)
-- Source Sans 3 as the default font
-- Saves to Downloads
+- **Web app** (runs in the browser on the user’s device)
+- Standalone **Mac app**
+- Gutenberg ebook page URLs
+- Text-only conversion (images skipped), TOC page-numbers stripped
+- 5mm print margins, Work Sans / Source Sans options
 
 Upstream credit: [@sieste](https://github.com/sieste).
 
 ---
 
-## Download (Mac)
+## Web app (paste URL in the browser)
 
-1. Grab the latest **PocketBook-macOS.zip** from [Releases](https://github.com/clarkey23/pocketbook/releases)
-2. Unzip and drag **PocketBook.app** to Applications
-3. Open it (right-click → Open the first time if macOS warns about an unidentified developer)
-4. Optional: keep it in the Dock
+The PDF is built **on the user’s device**. A tiny free Cloudflare Worker only proxies the Gutenberg zip (browsers can’t download it directly because of CORS).
 
-Paste a Gutenberg ebook link (example: `https://www.gutenberg.org/ebooks/36`). The PDF lands in **Downloads**.
+### Run locally
 
-Print **single-sided A4 at 100%**, then fold using the zine fold below.
+```bash
+# terminal 1 — Gutenberg proxy
+node workers/gutenberg-proxy/local-proxy.mjs
+
+# terminal 2 — static site
+cd web && python3 -m http.server 8080
+```
+
+Open http://127.0.0.1:8080
+
+### Deploy
+
+1. **Proxy** (Cloudflare account, free):
+
+```bash
+cd workers/gutenberg-proxy
+npx wrangler login
+npx wrangler deploy
+```
+
+Copy the `*.workers.dev` URL.
+
+2. **Site** — host the `web/` folder (GitHub Pages, Cloudflare Pages, Netlify, etc.).
+
+3. If the worker URL isn’t `https://pocketbook-gutenberg-proxy.workers.dev`, set it once in the browser console on your site:
+
+```js
+localStorage.setItem("pocketbook_proxy", "https://YOUR_SUBDOMAIN.workers.dev")
+```
+
+Or edit `getProxyBase()` in `web/lib/gutenberg.js`.
+
+---
+
+## Mac app
+
+1. Grab **PocketBook-macOS.zip** from [Releases](https://github.com/clarkey23/pocketbook/releases)
+2. Unzip → drag **PocketBook.app** to Applications
+3. First open: right-click → Open if Gatekeeper warns
 
 ---
 
@@ -42,14 +74,14 @@ Print **single-sided A4 at 100%**, then fold using the zine fold below.
 
 Ready-to-print PDFs in [books/](books/):
 
-- [Lewis Carroll: Alice's Adventures in Wonderland](books/Alice_s_Adventures_in_Wonderland-booklet.pdf)
-- [HG Wells: The War of the Worlds](books/The_War_of_the_Worlds-booklet.pdf)
-- [Marcus Aurelius: Meditations](books/Meditations-booklet.pdf)
-- [Fyodor Dostoyevsky: Notes from the Underground](books/Notes_from_the_Underground-booklet.pdf)
+- [Alice's Adventures in Wonderland](books/Alice_s_Adventures_in_Wonderland-booklet.pdf)
+- [The War of the Worlds](books/The_War_of_the_Worlds-booklet.pdf)
+- [Meditations](books/Meditations-booklet.pdf)
+- [Notes from the Underground](books/Notes_from_the_Underground-booklet.pdf)
 
 ---
 
-## Develop / build from source
+## CLI / Mac from source
 
 ```bash
 git clone https://github.com/clarkey23/pocketbook.git
@@ -57,50 +89,26 @@ cd pocketbook
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-brew install pango   # build machine only
-```
+brew install pango   # macOS build machine only
 
-### Run the GUI from source
-
-```bash
-source venv/bin/activate
-python mac/gui.py
-```
-
-### Run the CLI
-
-```bash
 ./pocketbook.py https://www.gutenberg.org/ebooks/36
-```
-
-### Build the standalone Mac app
-
-On an Apple Silicon Mac with Homebrew + pango installed:
-
-```bash
+# or
+python mac/gui.py
+# or
 ./build-standalone-app.sh
-open dist/PocketBook.app
 ```
-
-That produces `dist/PocketBook.app` and `dist/PocketBook-macOS.zip` for GitHub Releases.
 
 ---
 
 ## Print & fold
 
-Print on regular A4, **single-sided**, **100% / actual size** (not “fit to page”).
+Print A4, **single-sided**, **100% / actual size**.
 
-PocketBook PDFs include a 5mm margin so Officeworks-style printers don’t clip the edges.
-
-Then cut & fold each sheet with the zine fold:
+Then cut & fold with the zine fold:
 
 <img src="site/booklet-fold.png" width=50%>
 
-(Two-sided printing is possible but you re-fold after every 8 pages.)
-
 ### Sleeve
-
-Recycled cardboard + string works well as a sleeve:
 
 <img src="site/sleeve.png" width=70%>
 
@@ -110,5 +118,5 @@ Recycled cardboard + string works well as a sleeve:
 
 - [MIT License](LICENSE)
 - Based on [sieste/pocketbook](https://github.com/sieste/pocketbook) (MIT)
-- [Source Sans 3](fonts/README.md) (SIL OFL 1.1)
+- [Source Sans 3](fonts/README.md) / Work Sans (SIL OFL 1.1)
 - [Gutenberg Project permissions](https://www.gutenberg.org/policy/permission.html)
