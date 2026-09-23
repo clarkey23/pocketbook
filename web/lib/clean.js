@@ -34,11 +34,13 @@ export function prepareBookFromHtml(htmlString, fallbackName = "book") {
     blocks.push({ type, text });
   };
 
-  // Prefer semantic blocks; fall back to paragraphs / headings.
-  const nodes = root.querySelectorAll("h1, h2, h3, h4, h5, h6, p, blockquote, li, pre");
+  // Include table rows — many Gutenberg TOCs are <table>, not <p>/<li>.
+  const nodes = root.querySelectorAll("h1, h2, h3, h4, h5, h6, p, blockquote, li, pre, tr");
   if (nodes.length) {
     nodes.forEach((el) => {
       const tag = el.tagName.toLowerCase();
+      // Don't also emit cell <p>/<li> text when the whole row is already collected.
+      if (tag !== "tr" && el.closest("table")) return;
       if (/^h[1-6]$/.test(tag)) pushText("heading", el);
       else pushText("para", el);
     });
