@@ -1,20 +1,3 @@
-function isPageReference(text) {
-  const t = (text || "").trim();
-  if (!t) return true;
-  const compact = t.replace(/[\s\[\]\(\)\.,;:_pPgeéaá]+/g, "");
-  if (!compact) return true;
-  if (/^\d+([-\u2013\u2014]\d+)?$/.test(compact)) return true;
-  if (/^[ivxlcdmIVXLCDM]+$/.test(compact)) return true;
-  return false;
-}
-
-function stripTrailingPageNumber(text) {
-  return (text || "")
-    .trim()
-    .replace(/[\s.\u00b7\u2022\-_]*\d+\s*$/, "")
-    .trim();
-}
-
 function guessTitle(doc, fallback) {
   const meta = doc.querySelector('meta[name="dc.title"]');
   const raw = (meta?.getAttribute("content") || doc.title || fallback || "pocketbook").trim();
@@ -32,18 +15,9 @@ export function prepareBookFromHtml(htmlString, fallbackName = "book") {
   doc.querySelectorAll("#pg-header, #pg-footer, script, style, link, noscript").forEach((el) => el.remove());
   doc.querySelectorAll("img, svg, picture, source, object, embed, video, audio, iframe").forEach((el) => el.remove());
 
+  // Keep link text (incl. TOC entries). Do not delete anchors — that wiped contents pages.
   for (const a of [...doc.querySelectorAll("a")]) {
-    const text = (a.textContent || "").replace(/\s+/g, " ").trim();
-    if (isPageReference(text)) {
-      a.remove();
-      continue;
-    }
-    const cleaned = stripTrailingPageNumber(text);
-    if (!cleaned || isPageReference(cleaned)) {
-      a.remove();
-      continue;
-    }
-    a.replaceWith(doc.createTextNode(cleaned));
+    a.replaceWith(doc.createTextNode(a.textContent || ""));
   }
 
   doc.querySelectorAll("figure").forEach((fig) => {
